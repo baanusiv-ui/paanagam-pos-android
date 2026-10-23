@@ -12,6 +12,19 @@ const initialMenu = [
   { id: 'bun-muska', name: 'Bun Muska', tamil: 'பன் மஸ்கா', price: 30, category: 'Snacks', active: true },
   { id: 'chicken-fry', name: 'Chicken Fry', tamil: 'சிக்கன் ஃப்ரை', price: 40, category: 'Food', active: true }
 ];
+const INITIAL_RECIPES = {
+  'filter-coffee': [
+    { ingredient: 'Coffee powder', qty: 6.25, unit: 'g', note: 'Powder share at 250 g / 1,000 ml decoction yield' },
+    { ingredient: 'Milk', qty: 75, unit: 'ml', note: 'Per cup SOP' },
+    { ingredient: 'Sugar', qty: 5, unit: 'g', note: 'Per cup SOP' }
+  ]
+};
+const INITIAL_INVENTORY = [
+  { id: 'coffee-powder', name: 'Coffee powder', unit: 'g', onHand: 0, lots: [] },
+  { id: 'milk', name: 'Milk', unit: 'ml', onHand: 0, lots: [] },
+  { id: 'sugar', name: 'Sugar', unit: 'g', onHand: 0, lots: [] },
+  { id: 'decoction', name: 'Prepared decoction', unit: 'ml', onHand: 0, lots: [] }
+];
 const KEY = 'paanagam.pos.v1';
 const DEFAULT_PIN = '1234';
 const money = n => '₹' + Number(n || 0).toFixed(2).replace(/\.00$/, '');
