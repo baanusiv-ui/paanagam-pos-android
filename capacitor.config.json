@@ -1,0 +1,6 @@
+{
+  "appId": "in.paanagam.pos",
+  "appName": "Paanagam POS",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
