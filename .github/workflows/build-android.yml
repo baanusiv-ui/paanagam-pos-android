@@ -8,7 +8,6 @@ on:
       - 'src/**'
       - 'index.html'
       - 'package.json'
-      - 'package-lock.json'
       - 'vite.config.js'
       - 'capacitor.config.json'
       - '.github/workflows/build-android.yml'
@@ -27,7 +26,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
       - name: Install Java
         uses: actions/setup-java@v4
