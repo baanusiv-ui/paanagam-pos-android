@@ -14,16 +14,17 @@ const initialMenu = [
 ];
 const INITIAL_RECIPES = {
   'filter-coffee': [
-    { ingredient: 'Coffee powder', qty: 6.25, unit: 'g', note: 'Powder share at 250 g / 1,000 ml decoction yield' },
+    { ingredient: 'Prepared decoction', qty: 25, unit: 'ml', note: 'Per cup SOP' },
     { ingredient: 'Milk', qty: 75, unit: 'ml', note: 'Per cup SOP' },
     { ingredient: 'Sugar', qty: 5, unit: 'g', note: 'Per cup SOP' }
   ]
 };
 const INITIAL_INVENTORY = [
   { id: 'coffee-powder', name: 'Coffee powder', unit: 'g', onHand: 0, lots: [] },
+  { id: 'water', name: 'Water', unit: 'ml', onHand: 0, lots: [] },
+  { id: 'decoction', name: 'Prepared decoction', unit: 'ml', onHand: 0, lots: [] },
   { id: 'milk', name: 'Milk', unit: 'ml', onHand: 0, lots: [] },
-  { id: 'sugar', name: 'Sugar', unit: 'g', onHand: 0, lots: [] },
-  { id: 'decoction', name: 'Prepared decoction', unit: 'ml', onHand: 0, lots: [] }
+  { id: 'sugar', name: 'Sugar', unit: 'g', onHand: 0, lots: [] }
 ];
 const KEY = 'paanagam.pos.v1';
 const DEFAULT_PIN = '1234';
@@ -48,6 +49,12 @@ function App() {
   const [message, setMessage] = useState('');
   const [editing, setEditing] = useState(null);
   const [restoreText, setRestoreText] = useState('');
+  const [stockForm, setStockForm] = useState({ ingredientId: 'coffee-powder', qty: '', totalCost: '', supplier: '' });
+  const [stockOutForm, setStockOutForm] = useState({ ingredientId: 'coffee-powder', qty: '' });
+  const [recipeProduct, setRecipeProduct] = useState('filter-coffee');
+  const [recipeForm, setRecipeForm] = useState({ ingredient: 'Prepared decoction', qty: '25', unit: 'ml', note: '' });
+  const [prepBatches, setPrepBatches] = useState('1');
+  const [inventoryTab, setInventoryTab] = useState('Stock');
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(store)); } catch { setMessage('Storage is full. Export a backup and clear old sales.'); }
   }, [store]);
@@ -71,7 +78,20 @@ function App() {
   function checkout() {
     if (!cart.length) return flash('Add an item before checkout.');
     const sale = { id: 'PG-' + Date.now().toString().slice(-8), createdAt: new Date().toISOString(), items: cart.map(x => ({ ...x })), total, payment };
-    setStore(curr => ({ ...curr, sales: [sale, ...curr.sales] }));
+    setStore(curr => {
+      const inventory = curr.inventory.map(item => ({ ...item, lots: (item.lots || []).map(lot => ({ ...lot })) }));
+      const movements = [];
+      for (const sold of sale.items) {
+        for (const line of (curr.recipes?.[sold.id] || [])) {
+          const requested = Number(line.qty) * sold.qty;
+          const target = inventory.find(x => x.name.toLowerCase() === String(line.ingredient).toLowerCase());
+          if (!target || !Number.isFinite(requested) || requested <= 0) continue;
+          const result = consumeFromLots(target, requested);
+          movements.push({ id: 'MV-' + Date.now() + '-' + movements.length, at: new Date().toISOString(), type: 'SALE_CONSUMPTION', saleId: sale.id, product: sold.name, ingredient: target.name, qty: result.fulfilled, requestedQty: requested, unit: target.unit, lotUses: result.lotUses, cost: result.cost, insufficient: result.remaining > 0, missingQty: result.remaining, note: result.remaining > 0 ? 'Insufficient stock lots. Record a receipt and reconcile before business use.' : 'Consumed oldest purchase lots first; unit prices are not averaged.' });
+        }
+      }
+      return { ...curr, sales: [sale, ...curr.sales], inventory, stockMovements: [...movements.reverse(), ...(curr.stockMovements || [])] };
+    });
     setCart([]);
     setPage('POS');
     flash('Sale saved on this device: ' + sale.id);
@@ -87,13 +107,112 @@ function App() {
     try {
       const parsed = JSON.parse(restoreText);
       if (!Array.isArray(parsed.menu) || !Array.isArray(parsed.sales)) throw new Error('Backup must contain menu and sales arrays.');
-      setStore({ menu: parsed.menu, sales: parsed.sales, pin: parsed.pin || store.pin, loyalty: parsed.loyalty || {} });
+      setStore({
+        menu: parsed.menu, sales: parsed.sales, pin: parsed.pin || store.pin, loyalty: parsed.loyalty || {},
+        inventory: Array.isArray(parsed.inventory) ? parsed.inventory : store.inventory,
+        recipes: parsed.recipes && typeof parsed.recipes === 'object' ? parsed.recipes : store.recipes,
+        stockMovements: Array.isArray(parsed.stockMovements) ? parsed.stockMovements : store.stockMovements,
+        nextLotId: Number(parsed.nextLotId) || store.nextLotId
+      });
       setRestoreText(''); flash('Backup restored to this device.');
     } catch (e) { flash('Restore failed: ' + e.message); }
   }
   function unlockAdmin() {
     if (pinEntry === store.pin) { setAdminOpen(true); setPinEntry(''); setPage('Admin'); }
     else flash('Incorrect admin PIN.');
+  }
+  function receiveStock() {
+    const qty = Number(stockForm.qty);
+    const totalCost = Number(stockForm.totalCost);
+    const target = store.inventory.find(x => x.id === stockForm.ingredientId);
+    if (!target || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(totalCost) || totalCost < 0) return flash('Enter a valid quantity and total purchase cost.');
+    const lot = { id: 'LOT-' + (store.nextLotId || 1), receivedAt: new Date().toISOString(), qty, remaining: qty, unitCost: totalCost / qty, totalCost, supplier: stockForm.supplier.trim() || 'Not specified' };
+    setStore(curr => ({
+      ...curr,
+      inventory: curr.inventory.map(x => x.id === target.id ? { ...x, onHand: Number((x.onHand + qty).toFixed(4)), lots: [...(x.lots || []), lot] } : x),
+      stockMovements: [{ id: 'MV-' + Date.now(), at: new Date().toISOString(), type: 'PURCHASE', ingredient: target.name, qty, unit: target.unit, unitCost: lot.unitCost, totalCost, lotId: lot.id, supplier: lot.supplier }, ...(curr.stockMovements || [])],
+      nextLotId: (curr.nextLotId || 1) + 1
+    }));
+    setStockForm(x => ({ ...x, qty: '', totalCost: '', supplier: '' }));
+    flash('Stock receipt saved as a separate price lot.');
+  }
+  function consumeFromLots(item, requested) {
+    let remaining = requested;
+    const lotUses = [];
+    for (const lot of (item.lots || [])) {
+      const available = Math.max(0, Number(lot.remaining) || 0);
+      const take = Math.min(available, remaining);
+      if (take > 0) {
+        lot.remaining = Number((available - take).toFixed(4));
+        remaining = Number((remaining - take).toFixed(4));
+        lotUses.push({ lotId: lot.id, qty: take, unitCost: Number(lot.unitCost) || 0, cost: take * (Number(lot.unitCost) || 0) });
+      }
+      if (remaining <= 0) break;
+    }
+    const fulfilled = Number((requested - remaining).toFixed(4));
+    item.onHand = Math.max(0, Number((item.onHand - fulfilled).toFixed(4)));
+    return { fulfilled, remaining, lotUses, cost: lotUses.reduce((sum, x) => sum + x.cost, 0) };
+  }
+  function recordStockOut() {
+    const qty = Number(stockOutForm.qty);
+    const target = store.inventory.find(x => x.id === stockOutForm.ingredientId);
+    if (!target || !Number.isFinite(qty) || qty <= 0) return flash('Enter a valid stock-out quantity.');
+    if (qty > target.onHand) return flash('Stock-out exceeds recorded on-hand quantity.');
+    setStore(curr => {
+      const inventory = curr.inventory.map(x => ({ ...x, lots: (x.lots || []).map(l => ({ ...l })) }));
+      const item = inventory.find(x => x.id === target.id);
+      const result = consumeFromLots(item, qty);
+      return { ...curr, inventory, stockMovements: [{ id: 'MV-' + Date.now(), at: new Date().toISOString(), type: 'MANUAL_STOCK_OUT', ingredient: item.name, qty: result.fulfilled, unit: item.unit, lotUses: result.lotUses, cost: result.cost, note: 'Manual stock-out recorded FIFO.' }, ...(curr.stockMovements || [])] };
+    });
+    setStockOutForm(x => ({ ...x, qty: '' }));
+    flash('Stock-out recorded.');
+  }
+  function prepareDecoction() {
+    const batches = Number(prepBatches);
+    if (!Number.isInteger(batches) || batches < 1 || batches > 20) return flash('Choose between 1 and 20 batches.');
+    const powderRequired = 250 * batches;
+    const waterRequired = 1100 * batches;
+    const powderCurrent = store.inventory.find(x => x.id === 'coffee-powder');
+    const waterCurrent = store.inventory.find(x => x.id === 'water');
+    if (!powderCurrent || !waterCurrent || powderCurrent.onHand < powderRequired || waterCurrent.onHand < waterRequired ||
+      (powderCurrent.lots || []).reduce((sum, lot) => sum + Math.max(0, Number(lot.remaining) || 0), 0) < powderRequired ||
+      (waterCurrent.lots || []).reduce((sum, lot) => sum + Math.max(0, Number(lot.remaining) || 0), 0) < waterRequired) return flash('Not enough recorded FIFO coffee powder or water lots for this batch. Receive/reconcile stock first.');
+    setStore(curr => {
+      const inventory = curr.inventory.map(x => ({ ...x, lots: (x.lots || []).map(l => ({ ...l })) }));
+      const powder = inventory.find(x => x.id === 'coffee-powder');
+      const water = inventory.find(x => x.id === 'water');
+      const decoction = inventory.find(x => x.id === 'decoction');
+      const p = consumeFromLots(powder, powderRequired);
+      const w = consumeFromLots(water, waterRequired);
+      const outputQty = 1000 * batches;
+      const totalCost = p.cost + w.cost;
+      const lot = { id: 'LOT-' + (curr.nextLotId || 1), receivedAt: new Date().toISOString(), qty: outputQty, remaining: outputQty, unitCost: totalCost / outputQty, totalCost, supplier: 'Prepared decoction batch', batchCount: batches, coffeePowderGrams: powderRequired, waterMl: waterRequired };
+      decoction.onHand = Number((decoction.onHand + outputQty).toFixed(4));
+      decoction.lots = [...(decoction.lots || []), lot];
+      const when = new Date().toISOString();
+      const movements = [
+        { id: 'MV-' + Date.now() + '-powder', at: when, type: 'DECOCTION_INPUT', ingredient: powder.name, qty: p.fulfilled, unit: powder.unit, lotUses: p.lotUses, cost: p.cost, batchCount: batches, note: 'Coffee powder used in decoction batch.' },
+        { id: 'MV-' + Date.now() + '-water', at: when, type: 'DECOCTION_INPUT', ingredient: water.name, qty: w.fulfilled, unit: water.unit, lotUses: w.lotUses, cost: w.cost, batchCount: batches, note: 'Water input; 100 ml per batch retained by grounds as per SOP.' },
+        { id: 'MV-' + Date.now() + '-output', at: when, type: 'DECOCTION_OUTPUT', ingredient: decoction.name, qty: outputQty, unit: decoction.unit, lotId: lot.id, unitCost: lot.unitCost, totalCost, batchCount: batches, note: '250 g coffee powder + 1,100 ml water yields 1,000 ml decoction per batch.' }
+      ];
+      return { ...curr, inventory, stockMovements: [...movements, ...(curr.stockMovements || [])], nextLotId: (curr.nextLotId || 1) + 1 };
+    });
+    flash('Decoction batch recorded. Output lot carries its own batch cost.');
+  }
+  function saveRecipeLine() {
+    const qty = Number(recipeForm.qty);
+    if (!recipeForm.ingredient.trim() || !Number.isFinite(qty) || qty <= 0) return flash('Enter an ingredient and a quantity above zero.');
+    const stockItem = store.inventory.find(x => x.name.toLowerCase() === recipeForm.ingredient.trim().toLowerCase());
+    if (!stockItem) return flash('Ingredient is missing from the inventory ledger.');
+    if (stockItem.unit !== recipeForm.unit) return flash('Recipe unit must match stock unit: ' + stockItem.unit + '.');
+    const line = { ingredient: stockItem.name, qty, unit: recipeForm.unit, note: recipeForm.note.trim() };
+    setStore(curr => ({ ...curr, recipes: { ...(curr.recipes || INITIAL_RECIPES), [recipeProduct]: [...(curr.recipes?.[recipeProduct] || []), line] } }));
+    setRecipeForm(x => ({ ...x, qty: '', note: '' }));
+    flash('Recipe line added. Future sales will use it.');
+  }
+  function deleteRecipeLine(productId, index) {
+    setStore(curr => ({ ...curr, recipes: { ...(curr.recipes || INITIAL_RECIPES), [productId]: (curr.recipes?.[productId] || []).filter((_, i) => i !== index) } }));
+    flash('Recipe line removed.');
   }
   function saveProduct(product) {
     const clean = { ...product, price: Math.max(0, Number(product.price) || 0), active: true };
@@ -119,6 +238,7 @@ function App() {
     <nav className="tabs">
       <button className={page === 'POS' ? 'selected' : ''} onClick={() => setPage('POS')}>◫ <span>POS</span></button>
       <button className={page === 'Sales' ? 'selected' : ''} onClick={() => setPage('Sales')}>▤ <span>Sales</span></button>
+      <button className={page === 'Inventory' ? 'selected' : ''} onClick={() => adminOpen ? setPage('Inventory') : setPage('Admin')}>▦ <span>Stock</span></button>
       <button className={page === 'Admin' ? 'selected' : ''} onClick={() => setPage('Admin')}>⚙ <span>Admin</span></button>
     </nav>
 
