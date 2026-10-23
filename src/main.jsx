@@ -106,7 +106,7 @@ function App() {
     <nav className="tabs">
       <button className={page === 'POS' ? 'selected' : ''} onClick={() => setPage('POS')}>◫ <span>POS</span></button>
       <button className={page === 'Sales' ? 'selected' : ''} onClick={() => setPage('Sales')}>▤ <span>Sales</span></button>
-      <button className={page === 'Admin' ? 'selected' : ''} onClick={() => adminOpen ? setPage('Admin') : setAdminOpen(false)}>⚙ <span>Admin</span></button>
+      <button className={page === 'Admin' ? 'selected' : ''} onClick={() => setPage('Admin')}>⚙ <span>Admin</span></button>
     </nav>
 
     {page === 'POS' && <main className="layout">
