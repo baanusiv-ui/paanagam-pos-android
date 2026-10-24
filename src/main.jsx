@@ -331,6 +331,7 @@ function App() {
     <nav className="tabs">
       <button className={page === 'POS' ? 'selected' : ''} onClick={() => setPage('POS')}>◫ <span>POS</span></button>
       <button className={page === 'Sales' ? 'selected' : ''} onClick={() => setPage('Sales')}>▤ <span>Sales</span></button>
+      <button className={page === 'Closing' ? 'selected' : ''} onClick={() => setPage('Closing')}>▣ <span>Day Close</span></button>
       <button className={page === 'Inventory' ? 'selected' : ''} onClick={() => adminOpen ? setPage('Inventory') : setPage('Admin')}>▦ <span>Stock</span></button>
       <button className={page === 'Admin' ? 'selected' : ''} onClick={() => setPage('Admin')}>⚙ <span>Admin</span></button>
     </nav>
@@ -372,6 +373,29 @@ function App() {
           <p className="local-note">Sales are saved on this device.</p>
         </div>
       </aside>
+    </main>}
+
+    {page === 'Closing' && <main className="page-content">
+      <div className="section-heading"><div><h1>Day Closing Dashboard</h1><p>{new Date().toLocaleDateString()} · Completed bills saved on this device</p></div><button className="outline-button" onClick={exportBackup}>Export backup</button></div>
+      <div className="sales-summary">
+        <div><span>Total collected</span><strong>{money(todayTotal)}</strong></div>
+        <div><span>Cash</span><strong>{money(todayCash)}</strong></div>
+        <div><span>UPI</span><strong>{money(todayUpi)}</strong></div>
+        <div><span>Completed bills</span><strong>{todaySales.length}</strong></div>
+      </div>
+      <section className="admin-card">
+        <div className="admin-card-heading"><div><h2>Product-wise sales</h2><p>Quantity sold and sales amount for today</p></div><button className="outline-button small" onClick={() => {
+          const rows = [['Date', new Date().toLocaleDateString()], ['Total collected', todayTotal], ['Cash', todayCash], ['UPI', todayUpi], ['Bills', todaySales.length], [], ['Product', 'Quantity', 'Sales amount'], ...todayProductRows.map(([name, data]) => [name, data.qty, data.amount])];
+          const csv = rows.map(row => row.map(value => '"' + String(value ?? '').replace(/"/g, '""') + '"').join(',')).join('\\r\\n');
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a'); a.href = url; a.download = 'paanagam-daily-close-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
+          URL.revokeObjectURL(url);
+          flash('Daily closing CSV export started.');
+        }}>Export CSV</button></div>
+        {todayProductRows.length === 0 ? <p className="local-note">No completed bills for today yet. Complete a sale from POS to populate this report.</p> : <div className="sales-list">{todayProductRows.map(([name, data]) => <article className="sale-row" key={name}><div><strong>{name}</strong><span>{data.qty} sold today</span></div><div className="sale-right"><strong>{money(data.amount)}</strong></div></article>)}</div>}
+        <p className="local-note">Cash/UPI totals include completed sales only. This dashboard is local to this device; it does not sync to the cloud.</p>
+      </section>
     </main>}
 
     {page === 'Sales' && <main className="page-content">
