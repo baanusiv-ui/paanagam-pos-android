@@ -452,6 +452,7 @@ function App() {
       <button className={page === 'Sales' ? 'selected' : ''} onClick={() => setPage('Sales')}>▤ <span>Sales</span></button>
       <button className={page === 'Closing' ? 'selected' : ''} onClick={() => setPage('Closing')}>▣ <span>Day Close</span></button>
       <button className={page === 'Inventory' ? 'selected' : ''} onClick={() => setPage('Inventory')}>▦ <span>Stock</span></button>
+      <button className={page === 'Inventory' && inventoryTab === 'SOP Library' ? 'selected' : ''} onClick={() => { setPage('Inventory'); setInventoryTab('SOP Library'); }}>▤ <span>SOPs & Recipes</span></button>
       <button className={page === 'Admin' ? 'selected' : ''} onClick={() => setPage('Admin')}>⚙ <span>Admin</span></button>
     </nav>
 
