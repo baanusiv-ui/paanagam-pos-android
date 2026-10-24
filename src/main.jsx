@@ -114,13 +114,19 @@ function App() {
     const hasFreeCoffee = cart.some(item => item.id === 'loyalty-free-coffee' && item.qty > 0);
     if (hasFreeCoffee && (!loyaltyCustomer.trim() || Number(store.loyalty?.[loyaltyCustomer.trim()]?.rewards || 0) < cart.filter(item => item.id === 'loyalty-free-coffee').reduce((n,item) => n + item.qty, 0))) return flash('Enter the same customer ID and confirm available free coffee rewards before checkout.');
 
-    // Restrict checkout when recipe ingredients exceed available FIFO stock.
+    // Validate every master recipe before allowing a sale; do not silently skip unknown ingredients.
     const demand = new Map();
     for (const sold of cart) {
-      for (const line of (store.recipes?.[sold.id] || [])) {
-        const qty = Number(line.qty) * sold.qty;
+      const recipeId = sold.id === 'loyalty-free-coffee' ? 'filter-coffee' : sold.id;
+      const recipe = store.recipes?.[recipeId] || [];
+      if (!recipe.length) return flash('Master recipe missing for ' + sold.name + '. Configure it under Stock → Recipes before selling.');
+      for (const line of recipe) {
+        const qtyPerItem = Number(line.qty);
         const item = store.inventory.find(x => x.name.toLowerCase() === String(line.ingredient).toLowerCase());
-        if (!item || !Number.isFinite(qty) || qty <= 0) continue;
+        if (!item) return flash('Recipe ingredient "' + String(line.ingredient) + '" is missing from stock. Fix the master recipe before checkout.');
+        if (!Number.isFinite(qtyPerItem) || qtyPerItem <= 0) return flash('Invalid recipe quantity for ' + item.name + '. Fix the master recipe before checkout.');
+        if (String(line.unit) !== String(item.unit)) return flash('Recipe unit mismatch for ' + item.name + ': recipe uses ' + line.unit + ', stock uses ' + item.unit + '.');
+        const qty = qtyPerItem * sold.qty;
         demand.set(item.id, (demand.get(item.id) || 0) + qty);
       }
     }
