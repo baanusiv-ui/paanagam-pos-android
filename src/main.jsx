@@ -32,9 +32,25 @@ const money = n => '₹' + Number(n || 0).toFixed(2).replace(/\.00$/, '');
 function readStore() {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
-    return { menu: Array.isArray(saved.menu) ? saved.menu : initialMenu, sales: Array.isArray(saved.sales) ? saved.sales : [], pin: saved.pin || DEFAULT_PIN, loyalty: saved.loyalty || {} };
+    const inventory = Array.isArray(saved.inventory)
+      ? saved.inventory.map(item => ({ ...item, onHand: Math.max(0, Number(item.onHand) || 0), lots: Array.isArray(item.lots) ? item.lots : [] }))
+      : INITIAL_INVENTORY.map(item => ({ ...item, lots: [] }));
+    return {
+      menu: Array.isArray(saved.menu) ? saved.menu : initialMenu,
+      sales: Array.isArray(saved.sales) ? saved.sales : [],
+      pin: saved.pin || DEFAULT_PIN,
+      loyalty: saved.loyalty || {},
+      inventory,
+      recipes: saved.recipes && typeof saved.recipes === 'object' ? saved.recipes : INITIAL_RECIPES,
+      stockMovements: Array.isArray(saved.stockMovements) ? saved.stockMovements : [],
+      nextLotId: Number.isInteger(saved.nextLotId) && saved.nextLotId > 0 ? saved.nextLotId : 1
+    };
   } catch {
-    return { menu: initialMenu, sales: [], pin: DEFAULT_PIN, loyalty: {} };
+    return {
+      menu: initialMenu, sales: [], pin: DEFAULT_PIN, loyalty: {},
+      inventory: INITIAL_INVENTORY.map(item => ({ ...item, lots: [] })),
+      recipes: INITIAL_RECIPES, stockMovements: [], nextLotId: 1
+    };
   }
 }
 function App() {
@@ -77,6 +93,26 @@ function App() {
   }
   function checkout() {
     if (!cart.length) return flash('Add an item before checkout.');
+
+    // Validate all recipe demand against FIFO purchase lots before creating any sale.
+    const demand = new Map();
+    for (const sold of cart) {
+      for (const line of (store.recipes?.[sold.id] || [])) {
+        const qty = Number(line.qty) * sold.qty;
+        const item = store.inventory.find(x => x.name.toLowerCase() === String(line.ingredient).toLowerCase());
+        if (!item || !Number.isFinite(qty) || qty <= 0) continue;
+        demand.set(item.id, (demand.get(item.id) || 0) + qty);
+      }
+    }
+    for (const [itemId, required] of demand) {
+      const item = store.inventory.find(x => x.id === itemId);
+      const lotAvailable = (item.lots || []).reduce((sum, lot) => sum + Math.max(0, Number(lot.remaining) || 0), 0);
+      const available = Math.min(Math.max(0, Number(item.onHand) || 0), lotAvailable);
+      if (required > available + 0.00001) {
+        return flash('Cannot complete sale: ' + item.name + ' needs ' + required + ' ' + item.unit + ', FIFO lots have ' + available + '. Receive/reconcile stock first.');
+      }
+    }
+
     const sale = { id: 'PG-' + Date.now().toString().slice(-8), createdAt: new Date().toISOString(), items: cart.map(x => ({ ...x })), total, payment };
     setStore(curr => {
       const inventory = curr.inventory.map(item => ({ ...item, lots: (item.lots || []).map(lot => ({ ...lot })) }));
@@ -87,7 +123,7 @@ function App() {
           const target = inventory.find(x => x.name.toLowerCase() === String(line.ingredient).toLowerCase());
           if (!target || !Number.isFinite(requested) || requested <= 0) continue;
           const result = consumeFromLots(target, requested);
-          movements.push({ id: 'MV-' + Date.now() + '-' + movements.length, at: new Date().toISOString(), type: 'SALE_CONSUMPTION', saleId: sale.id, product: sold.name, ingredient: target.name, qty: result.fulfilled, requestedQty: requested, unit: target.unit, lotUses: result.lotUses, cost: result.cost, insufficient: result.remaining > 0, missingQty: result.remaining, note: result.remaining > 0 ? 'Insufficient stock lots. Record a receipt and reconcile before business use.' : 'Consumed oldest purchase lots first; unit prices are not averaged.' });
+          movements.push({ id: 'MV-' + Date.now() + '-' + movements.length, at: new Date().toISOString(), type: 'SALE_CONSUMPTION', saleId: sale.id, product: sold.name, ingredient: target.name, qty: result.fulfilled, requestedQty: requested, unit: target.unit, lotUses: result.lotUses, cost: result.cost, insufficient: result.remaining > 0, missingQty: result.remaining, note: 'Consumed oldest purchase lots first; unit prices are not averaged.' });
         }
       }
       return { ...curr, sales: [sale, ...curr.sales], inventory, stockMovements: [...movements.reverse(), ...(curr.stockMovements || [])] };
@@ -107,6 +143,8 @@ function App() {
     try {
       const parsed = JSON.parse(restoreText);
       if (!Array.isArray(parsed.menu) || !Array.isArray(parsed.sales)) throw new Error('Backup must contain menu and sales arrays.');
+      if (parsed.inventory != null && !Array.isArray(parsed.inventory)) throw new Error('Backup inventory must be an array.');
+      if (parsed.stockMovements != null && !Array.isArray(parsed.stockMovements)) throw new Error('Backup stock movements must be an array.');
       setStore({
         menu: parsed.menu, sales: parsed.sales, pin: parsed.pin || store.pin, loyalty: parsed.loyalty || {},
         inventory: Array.isArray(parsed.inventory) ? parsed.inventory : store.inventory,
