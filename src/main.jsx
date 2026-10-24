@@ -94,6 +94,8 @@ function App() {
   }
   function checkout() {
     if (!cart.length) return flash('Add an item before checkout.');
+    const hasFreeCoffee = cart.some(item => item.id === 'loyalty-free-coffee' && item.qty > 0);
+    if (hasFreeCoffee && (!loyaltyCustomer.trim() || Number(store.loyalty?.[loyaltyCustomer.trim()]?.rewards || 0) < cart.filter(item => item.id === 'loyalty-free-coffee').reduce((n,item) => n + item.qty, 0))) return flash('Enter the same customer ID and confirm available free coffee rewards before checkout.');
 
     // Validate all recipe demand against FIFO purchase lots before creating any sale.
     const demand = new Map();
@@ -130,10 +132,11 @@ function App() {
         }
       }
       const loyalty = { ...(curr.loyalty || {}) };
-      if (customerKey && earnedStamps) {
+      if (customerKey) {
         const prior = loyalty[customerKey] || { stamps: 0, rewards: 0 };
         const combined = Math.max(0, Number(prior.stamps) || 0) + earnedStamps;
-        loyalty[customerKey] = { stamps: combined % 10, rewards: (Math.max(0, Number(prior.rewards) || 0) + Math.floor(combined / 10)) };
+        const redeemed = sale.items.filter(item => item.id === 'loyalty-free-coffee').reduce((n,item) => n + item.qty, 0);
+        loyalty[customerKey] = { stamps: combined % 10, rewards: Math.max(0, Number(prior.rewards) || 0) + Math.floor(combined / 10) - redeemed };
       }
       return { ...curr, loyalty, sales: [sale, ...curr.sales], inventory, stockMovements: [...movements.reverse(), ...(curr.stockMovements || [])] };
     });
@@ -314,7 +317,6 @@ function App() {
             {Array.from({length:10}, (_,i) => <i key={i} className={i < (Math.max(0, Number(store.loyalty?.[loyaltyCustomer.trim()]?.stamps) || 0)) ? 'stamp filled' : 'stamp'} />)}
             {Number(store.loyalty?.[loyaltyCustomer.trim()]?.rewards) > 0 && <button className="outline-button small" onClick={() => {
               const key = loyaltyCustomer.trim();
-              setStore(curr => ({...curr, loyalty:{...(curr.loyalty||{}), [key]:{stamps:Math.max(0,Number(curr.loyalty?.[key]?.stamps)||0), rewards:Math.max(0,(Number(curr.loyalty?.[key]?.rewards)||0)-1)}}}));
               setCart(curr => { const found=curr.find(x=>x.id==='loyalty-free-coffee'); return found ? curr.map(x=>x.id==='loyalty-free-coffee'?{...x,qty:x.qty+1}:x) : [...curr,{id:'loyalty-free-coffee',name:'Loyalty Free Coffee',price:0,qty:1}]; });
               flash('Free coffee added to the bill.');
             }}>Redeem 1 free coffee</button>}
