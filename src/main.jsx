@@ -72,6 +72,7 @@ function App() {
   const [prepBatches, setPrepBatches] = useState('1');
   const [inventoryTab, setInventoryTab] = useState('Stock');
   const [loyaltyCustomer, setLoyaltyCustomer] = useState('');
+  const [reconcileForm, setReconcileForm] = useState({ ingredientId: 'coffee-powder', physicalQty: '', note: '' });
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(store)); } catch { setMessage('Storage is full. Export a backup and clear old sales.'); }
   }, [store]);
@@ -230,6 +231,35 @@ function App() {
     setStockOutForm(x => ({ ...x, qty: '' }));
     flash('Stock-out recorded.');
   }
+  function recordReconciliation() {
+    const physicalQty = Number(reconcileForm.physicalQty);
+    const target = store.inventory.find(x => x.id === reconcileForm.ingredientId);
+    if (!target || reconcileForm.physicalQty === '' || !Number.isFinite(physicalQty) || physicalQty < 0) return flash('Enter a valid physical count (zero or higher).');
+    const recordedQty = Math.max(0, Number(target.onHand) || 0);
+    const variance = Number((physicalQty - recordedQty).toFixed(4));
+    if (Math.abs(variance) < 0.00001) return flash('Physical count matches recorded stock. No adjustment needed.');
+    const at = new Date().toISOString();
+    setStore(curr => {
+      const inventory = curr.inventory.map(x => ({ ...x, lots: (x.lots || []).map(l => ({ ...l })) }));
+      const item = inventory.find(x => x.id === target.id);
+      let lotUses = [];
+      let adjustmentLotId;
+      if (variance < 0) {
+        const result = consumeFromLots(item, Math.abs(variance));
+        lotUses = result.lotUses;
+      } else {
+        // Physical surplus has no verified purchase price; keep it separate and do not average costs.
+        adjustmentLotId = 'ADJ-' + Date.now();
+        item.lots = [...(item.lots || []), { id: adjustmentLotId, receivedAt: at, qty: variance, remaining: variance, unitCost: 0, totalCost: 0, supplier: 'Physical reconciliation — cost unknown', reconciliationAdjustment: true }];
+        item.onHand = Number((recordedQty + variance).toFixed(4));
+      }
+      item.onHand = Number(physicalQty.toFixed(4));
+      const movement = { id: 'MV-' + Date.now(), at, type: 'RECONCILIATION', ingredient: item.name, unit: item.unit, recordedQty, physicalQty, variance, qty: Math.abs(variance), lotUses, adjustmentLotId, note: reconcileForm.note.trim() || (variance > 0 ? 'Physical surplus; cost unknown and not averaged into purchase lots.' : 'Physical shortage removed from oldest FIFO lots.') };
+      return { ...curr, inventory, stockMovements: [movement, ...(curr.stockMovements || [])] };
+    });
+    setReconcileForm(x => ({ ...x, physicalQty: '', note: '' }));
+    flash('Physical stock reconciliation saved with variance history.');
+  }
   function prepareDecoction() {
     const batches = Number(prepBatches);
     if (!Number.isInteger(batches) || batches < 1 || batches > 20) return flash('Choose between 1 and 20 batches.');
@@ -373,6 +403,19 @@ function App() {
       <div className="admin-content"><div className="section-heading"><div><h1>Admin settings</h1><p>Menu, security and device backup</p></div><button className="text-button" onClick={() => { setAdminOpen(false); setPage('POS'); }}>Lock</button></div>
         <section className="admin-card"><div className="admin-card-heading"><div><h2>Menu management</h2><p>Add products or change pricing.</p></div><button className="solid-small" onClick={() => setEditing({ id: 'item-' + Date.now(), name: '', tamil: '', price: 20, category: 'Coffee', active: true })}>+ Add</button></div>
           {store.menu.map(p => <div className="menu-admin-row" key={p.id}><div><strong>{p.name}</strong><span>{p.category} · {money(p.price)}</span></div><button className="outline-button small" onClick={() => setEditing({ ...p })}>Edit</button><button className="text-button danger" onClick={() => setStore(curr => ({ ...curr, menu: curr.menu.map(m => m.id === p.id ? { ...m, active: !m.active } : m) }))}>{p.active ? 'Hide' : 'Show'}</button></div>)}
+        </section>
+        <section className="admin-card">
+          <div className="admin-card-heading"><div><h2>Physical stock reconciliation</h2><p>Count stock and record the variance. FIFO purchase prices are never averaged.</p></div></div>
+          <label>Ingredient
+            <select value={reconcileForm.ingredientId} onChange={e => setReconcileForm(x => ({ ...x, ingredientId: e.target.value, physicalQty: '' }))}>
+              {store.inventory.map(item => <option key={item.id} value={item.id}>{item.name} ({item.unit})</option>)}
+            </select>
+          </label>
+          {(() => { const item = store.inventory.find(x => x.id === reconcileForm.ingredientId); return item ? <p className="local-note">Recorded on-hand: <strong>{Number(item.onHand || 0).toFixed(4).replace(/\\.?0+$/, '')} {item.unit}</strong> · FIFO lot balance: <strong>{(item.lots || []).reduce((s,l) => s + Math.max(0, Number(l.remaining) || 0), 0).toFixed(4).replace(/\\.?0+$/, '')} {item.unit}</strong></p> : null; })()}
+          <label>Actual physical quantity<input type="number" min="0" step="0.0001" required value={reconcileForm.physicalQty} onChange={e => setReconcileForm(x => ({ ...x, physicalQty: e.target.value }))} placeholder="Enter count in selected unit"/></label>
+          <label>Reason / note (optional)<input value={reconcileForm.note} onChange={e => setReconcileForm(x => ({ ...x, note: e.target.value }))} placeholder="e.g. weekly physical count"/></label>
+          <button className="checkout" onClick={recordReconciliation} disabled={reconcileForm.physicalQty === ''}>Save physical count</button>
+          <p className="local-note">A shortage consumes oldest FIFO lots first. A surplus is recorded as a separate zero-cost adjustment lot marked cost unknown; it is not treated as a purchase.</p>
         </section>
         <section className="admin-card"><h2>Change admin PIN</h2><p>Use 4–8 digits. Keep this PIN private.</p><div className="inline-form"><input type="password" inputMode="numeric" maxLength="8" placeholder="New PIN" value={newPin} onChange={e => setNewPin(e.target.value.replace(/\D/g, ''))}/><button className="solid-small" onClick={changePin}>Save PIN</button></div></section>
         <section className="admin-card"><h2>Backup and restore</h2><p>Export a JSON backup regularly. Restore replaces the local menu and sales with the backup contents.</p><div className="button-pair"><button className="outline-button" onClick={exportBackup}>Download backup</button><button className="outline-button" onClick={() => document.getElementById('backup-file').click()}>Choose backup file</button><input id="backup-file" className="hidden" type="file" accept="application/json,.json" onChange={e => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = () => setRestoreText(String(reader.result || '')); reader.readAsText(file); }}} /></div>
