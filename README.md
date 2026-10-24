@@ -7,6 +7,8 @@ Offline-first Android POS starter built with React, Vite and Capacitor. The APK 
 - Product menu, cart, quantities and cash/UPI payment selection
 - Local sales history and daily totals
 - PIN-gated admin access, menu editing and JSON backup/restore
+- Offline-first local WebView storage, plus configurable automatic cloud backup/restore over a secured HTTPS endpoint when configured
+- Cloud backup status and manual sync/restore controls
 - Local ingredient stock ledger with individual purchase lots
 - FIFO lot consumption that preserves lot prices instead of averaging
 - Decoction preparation workflow: 250 g coffee powder + 1,100 ml water produces approximately 1,000 ml decoction per batch
@@ -22,7 +24,7 @@ Offline-first Android POS starter built with React, Vite and Capacitor. The APK 
 
 ## Important limitations
 
-This is still a starter, not a complete migration of the existing Apper POS. It currently stores data in WebView local storage, so export JSON backups regularly. The stock and recipe workflow needs careful in-store verification before live use. Production upgrades still needed include SQLite-backed storage and migration, stock transfer workflows, purchase entry improvements, full recipe/inventory coverage for every menu item, food-cost and margin reports, next-day planning, robust authentication, cloud sync, printer integration, and comprehensive tests.
+This is an offline-first trial build, not yet a complete migration of every previously planned Apper POS module. Local data is stored in WebView local storage and survives normal app restarts, but it is not SQLite. Export JSON backups regularly. Cloud sync is configurable but is NOT active until a secured HTTPS backup endpoint and bearer token are configured. The endpoint must accept POST JSON `{ app, schema, deviceId, updatedAt, payload }` and GET with `?deviceId=...`, returning the saved payload. Do not put Supabase service-role keys in the APK or use a public database policy. Before production, complete the secured cloud endpoint, SQLite migration, store-to-kitchen transfers, full recipe coverage, food-cost/margin and next-day planning, robust role-based authentication, printer integration, and full end-to-end tests.
 
 The stock ledger starts at zero. Record actual opening stock and costs before testing. Recipe unit must match the corresponding inventory unit. Stock shortages are flagged in the movement ledger; they must be reconciled before live business use.
 
