@@ -275,7 +275,7 @@ function App() {
     const second = secondaryDraft.secondInputInventoryId ? store.inventory.find(x => x.id === secondaryDraft.secondInputInventoryId) : null;
     if (!name || !output || !first || !Number.isFinite(yieldQty) || yieldQty <= 0 || !Number.isFinite(inputQty) || inputQty <= 0) return flash('Enter a recipe name, output yield and valid first input.');
     if (first.id === output.id || (second && second.id === output.id)) return flash('Recipe output cannot also be one of its own inputs.');
-    if (secondInputQty && (!second || !Number.isFinite(secondInputQty) || secondInputQty <= 0)) return flash('Check the second input quantity.');
+    if (second && (!Number.isFinite(secondInputQty) || secondInputQty <= 0)) return flash('Check the second input quantity.');
     const inputs = [{ inventoryId: first.id, qty: inputQty }];
     if (second && secondInputQty > 0) inputs.push({ inventoryId: second.id, qty: secondInputQty });
     const recipe = { id: 'bom-' + Date.now(), name, outputInventoryId: output.id, yieldQty, inputs };
