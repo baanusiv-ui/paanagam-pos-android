@@ -97,25 +97,8 @@ function App() {
     const hasFreeCoffee = cart.some(item => item.id === 'loyalty-free-coffee' && item.qty > 0);
     if (hasFreeCoffee && (!loyaltyCustomer.trim() || Number(store.loyalty?.[loyaltyCustomer.trim()]?.rewards || 0) < cart.filter(item => item.id === 'loyalty-free-coffee').reduce((n,item) => n + item.qty, 0))) return flash('Enter the same customer ID and confirm available free coffee rewards before checkout.');
 
-    // Validate all recipe demand against FIFO purchase lots before creating any sale.
-    const demand = new Map();
-    for (const sold of cart) {
-      for (const line of (store.recipes?.[sold.id] || [])) {
-        const qty = Number(line.qty) * sold.qty;
-        const item = store.inventory.find(x => x.name.toLowerCase() === String(line.ingredient).toLowerCase());
-        if (!item || !Number.isFinite(qty) || qty <= 0) continue;
-        demand.set(item.id, (demand.get(item.id) || 0) + qty);
-      }
-    }
-    for (const [itemId, required] of demand) {
-      const item = store.inventory.find(x => x.id === itemId);
-      const lotAvailable = (item.lots || []).reduce((sum, lot) => sum + Math.max(0, Number(lot.remaining) || 0), 0);
-      const available = Math.min(Math.max(0, Number(item.onHand) || 0), lotAvailable);
-      if (required > available + 0.00001) {
-        return flash('Cannot complete sale: ' + item.name + ' needs ' + required + ' ' + item.unit + ', FIFO lots have ' + available + '. Receive/reconcile stock first.');
-      }
-    }
-
+    // Sales may be recorded even when stock is not entered yet.
+    // Stock consumption is limited to available FIFO lots; any shortage is logged for later reconciliation.
     const customerKey = loyaltyCustomer.trim();
     const earnedStamps = customerKey ? cart.reduce((sum, item) => sum + (store.menu.find(m => m.id === item.id)?.category === 'Coffee' && item.price > 0 ? item.qty : 0), 0) : 0;
     const sale = { id: 'PG-' + Date.now().toString().slice(-8), createdAt: new Date().toISOString(), items: cart.map(x => ({ ...x })), total, payment, customerKey: customerKey || undefined, loyaltyStampsEarned: earnedStamps };
@@ -128,7 +111,7 @@ function App() {
           const target = inventory.find(x => x.name.toLowerCase() === String(line.ingredient).toLowerCase());
           if (!target || !Number.isFinite(requested) || requested <= 0) continue;
           const result = consumeFromLots(target, requested);
-          movements.push({ id: 'MV-' + Date.now() + '-' + movements.length, at: new Date().toISOString(), type: 'SALE_CONSUMPTION', saleId: sale.id, product: sold.name, ingredient: target.name, qty: result.fulfilled, requestedQty: requested, unit: target.unit, lotUses: result.lotUses, cost: result.cost, insufficient: result.remaining > 0, missingQty: result.remaining, note: 'Consumed oldest purchase lots first; unit prices are not averaged.' });
+          movements.push({ id: 'MV-' + Date.now() + '-' + movements.length, at: new Date().toISOString(), type: 'SALE_CONSUMPTION', saleId: sale.id, product: sold.name, ingredient: target.name, qty: result.fulfilled, requestedQty: requested, unit: target.unit, lotUses: result.lotUses, cost: result.cost, insufficient: result.remaining > 0, missingQty: result.remaining, note: result.remaining > 0 ? 'STOCK SHORTAGE: sale recorded; receive/reconcile stock and review missing quantity. FIFO costing is partial.' : 'Consumed oldest purchase lots first; unit prices are not averaged.' });
         }
       }
       const loyalty = { ...(curr.loyalty || {}) };
