@@ -146,7 +146,8 @@ function App() {
       const inventory = curr.inventory.map(item => ({ ...item, lots: (item.lots || []).map(lot => ({ ...lot })) }));
       const movements = [];
       for (const sold of sale.items) {
-        for (const line of (curr.recipes?.[sold.id] || [])) {
+        const recipeId = sold.id === 'loyalty-free-coffee' ? 'filter-coffee' : sold.id;
+        for (const line of (curr.recipes?.[recipeId] || [])) {
           const requested = Number(line.qty) * sold.qty;
           const target = inventory.find(x => x.name.toLowerCase() === String(line.ingredient).toLowerCase());
           if (!target || !Number.isFinite(requested) || requested <= 0) continue;
