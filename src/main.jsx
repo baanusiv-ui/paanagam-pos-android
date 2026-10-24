@@ -332,7 +332,7 @@ function App() {
       <button className={page === 'POS' ? 'selected' : ''} onClick={() => setPage('POS')}>◫ <span>POS</span></button>
       <button className={page === 'Sales' ? 'selected' : ''} onClick={() => setPage('Sales')}>▤ <span>Sales</span></button>
       <button className={page === 'Closing' ? 'selected' : ''} onClick={() => setPage('Closing')}>▣ <span>Day Close</span></button>
-      <button className={page === 'Inventory' ? 'selected' : ''} onClick={() => adminOpen ? setPage('Inventory') : setPage('Admin')}>▦ <span>Stock</span></button>
+      <button className={page === 'Inventory' ? 'selected' : ''} onClick={() => setPage('Inventory')}>▦ <span>Stock</span></button>
       <button className={page === 'Admin' ? 'selected' : ''} onClick={() => setPage('Admin')}>⚙ <span>Admin</span></button>
     </nav>
 
