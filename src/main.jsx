@@ -26,6 +26,7 @@ const INITIAL_INVENTORY = [
   { id: 'milk', name: 'Milk', unit: 'ml', onHand: 0, lots: [] },
   { id: 'sugar', name: 'Sugar', unit: 'g', onHand: 0, lots: [] }
 ];
+const INITIAL_SECONDARY_RECIPES = [{ id: 'decoction-bom', name: 'Coffee Decoction', outputInventoryId: 'decoction', yieldQty: 1000, inputs: [{ inventoryId: 'coffee-powder', qty: 250 }, { inventoryId: 'water', qty: 1100 }] }];
 const KEY = 'paanagam.pos.v1';
 const DEFAULT_PIN = '1234';
 const money = n => '₹' + Number(n || 0).toFixed(2).replace(/\.00$/, '');
@@ -42,6 +43,7 @@ function readStore() {
       loyalty: saved.loyalty || {},
       inventory,
       recipes: saved.recipes && typeof saved.recipes === 'object' ? saved.recipes : INITIAL_RECIPES,
+      secondaryRecipes: Array.isArray(saved.secondaryRecipes) && saved.secondaryRecipes.length ? saved.secondaryRecipes : INITIAL_SECONDARY_RECIPES,
       stockMovements: Array.isArray(saved.stockMovements) ? saved.stockMovements : [],
       nextLotId: Number.isInteger(saved.nextLotId) && saved.nextLotId > 0 ? saved.nextLotId : 1
     };
@@ -49,7 +51,7 @@ function readStore() {
     return {
       menu: initialMenu, sales: [], pin: DEFAULT_PIN, loyalty: {},
       inventory: INITIAL_INVENTORY.map(item => ({ ...item, lots: [] })),
-      recipes: INITIAL_RECIPES, stockMovements: [], nextLotId: 1
+      recipes: INITIAL_RECIPES, secondaryRecipes: INITIAL_SECONDARY_RECIPES, stockMovements: [], nextLotId: 1
     };
   }
 }
@@ -70,6 +72,8 @@ function App() {
   const [recipeProduct, setRecipeProduct] = useState('filter-coffee');
   const [recipeForm, setRecipeForm] = useState({ ingredient: 'Prepared decoction', qty: '25', unit: 'ml', note: '' });
   const [prepBatches, setPrepBatches] = useState('1');
+  const [secondaryRecipeId, setSecondaryRecipeId] = useState('decoction-bom');
+  const [secondaryDraft, setSecondaryDraft] = useState({ name: '', outputInventoryId: 'decoction', yieldQty: '1000', inputInventoryId: 'coffee-powder', inputQty: '250', secondInputInventoryId: 'water', secondInputQty: '1100' });
   const [inventoryTab, setInventoryTab] = useState('Stock');
   const [loyaltyCustomer, setLoyaltyCustomer] = useState('');
   const [reconcileForm, setReconcileForm] = useState({ ingredientId: 'coffee-powder', physicalQty: '', note: '' });
@@ -175,6 +179,7 @@ function App() {
         menu: parsed.menu, sales: parsed.sales, pin: parsed.pin || store.pin, loyalty: parsed.loyalty || {},
         inventory: Array.isArray(parsed.inventory) ? parsed.inventory : store.inventory,
         recipes: parsed.recipes && typeof parsed.recipes === 'object' ? parsed.recipes : store.recipes,
+        secondaryRecipes: Array.isArray(parsed.secondaryRecipes) ? parsed.secondaryRecipes : store.secondaryRecipes,
         stockMovements: Array.isArray(parsed.stockMovements) ? parsed.stockMovements : store.stockMovements,
         nextLotId: Number(parsed.nextLotId) || store.nextLotId
       });
@@ -260,39 +265,62 @@ function App() {
     setReconcileForm(x => ({ ...x, physicalQty: '', note: '' }));
     flash('Physical stock reconciliation saved with variance history.');
   }
+  function saveSecondaryRecipe() {
+    const name = secondaryDraft.name.trim();
+    const yieldQty = Number(secondaryDraft.yieldQty);
+    const inputQty = Number(secondaryDraft.inputQty);
+    const secondInputQty = Number(secondaryDraft.secondInputQty);
+    const output = store.inventory.find(x => x.id === secondaryDraft.outputInventoryId);
+    const first = store.inventory.find(x => x.id === secondaryDraft.inputInventoryId);
+    const second = secondaryDraft.secondInputInventoryId ? store.inventory.find(x => x.id === secondaryDraft.secondInputInventoryId) : null;
+    if (!name || !output || !first || !Number.isFinite(yieldQty) || yieldQty <= 0 || !Number.isFinite(inputQty) || inputQty <= 0) return flash('Enter a recipe name, output yield and valid first input.');
+    if (first.id === output.id || (second && second.id === output.id)) return flash('Recipe output cannot also be one of its own inputs.');
+    if (secondInputQty && (!second || !Number.isFinite(secondInputQty) || secondInputQty <= 0)) return flash('Check the second input quantity.');
+    const inputs = [{ inventoryId: first.id, qty: inputQty }];
+    if (second && secondInputQty > 0) inputs.push({ inventoryId: second.id, qty: secondInputQty });
+    const recipe = { id: 'bom-' + Date.now(), name, outputInventoryId: output.id, yieldQty, inputs };
+    setStore(curr => ({ ...curr, secondaryRecipes: [...(curr.secondaryRecipes || []), recipe] }));
+    setSecondaryRecipeId(recipe.id);
+    setSecondaryDraft(x => ({ ...x, name: '' }));
+    flash('Secondary recipe/BOM saved. It is ready for batch production.');
+  }
   function prepareDecoction() {
+    const recipe = (store.secondaryRecipes || INITIAL_SECONDARY_RECIPES).find(x => x.id === secondaryRecipeId);
     const batches = Number(prepBatches);
+    if (!recipe) return flash('Select a secondary recipe first.');
     if (!Number.isInteger(batches) || batches < 1 || batches > 20) return flash('Choose between 1 and 20 batches.');
-    const powderRequired = 250 * batches;
-    const waterRequired = 1100 * batches;
-    const powderCurrent = store.inventory.find(x => x.id === 'coffee-powder');
-    const waterCurrent = store.inventory.find(x => x.id === 'water');
-    if (!powderCurrent || !waterCurrent || powderCurrent.onHand < powderRequired || waterCurrent.onHand < waterRequired ||
-      (powderCurrent.lots || []).reduce((sum, lot) => sum + Math.max(0, Number(lot.remaining) || 0), 0) < powderRequired ||
-      (waterCurrent.lots || []).reduce((sum, lot) => sum + Math.max(0, Number(lot.remaining) || 0), 0) < waterRequired) return flash('Not enough recorded FIFO coffee powder or water lots for this batch. Receive/reconcile stock first.');
+    const output = store.inventory.find(x => x.id === recipe.outputInventoryId);
+    if (!output || !Array.isArray(recipe.inputs) || !recipe.inputs.length) return flash('BOM output or input is missing. Check the recipe.');
+    for (const input of recipe.inputs) {
+      const item = store.inventory.find(x => x.id === input.inventoryId);
+      const required = Number(input.qty) * batches;
+      const lotAvailable = item ? (item.lots || []).reduce((sum, lot) => sum + Math.max(0, Number(lot.remaining) || 0), 0) : 0;
+      if (!item || !Number.isFinite(required) || required <= 0 || item.id === output.id || item.onHand + 0.00001 < required || lotAvailable + 0.00001 < required) return flash('Insufficient FIFO stock for ' + (item?.name || 'BOM input') + '. No batch was recorded.');
+    }
     setStore(curr => {
       const inventory = curr.inventory.map(x => ({ ...x, lots: (x.lots || []).map(l => ({ ...l })) }));
-      const powder = inventory.find(x => x.id === 'coffee-powder');
-      const water = inventory.find(x => x.id === 'water');
-      const decoction = inventory.find(x => x.id === 'decoction');
-      const p = consumeFromLots(powder, powderRequired);
-      const w = consumeFromLots(water, waterRequired);
-      const outputQty = 1000 * batches;
-      const totalCost = p.cost + w.cost;
-      const lot = { id: 'LOT-' + (curr.nextLotId || 1), receivedAt: new Date().toISOString(), qty: outputQty, remaining: outputQty, unitCost: totalCost / outputQty, totalCost, supplier: 'Prepared decoction batch', batchCount: batches, coffeePowderGrams: powderRequired, waterMl: waterRequired };
-      decoction.onHand = Number((decoction.onHand + outputQty).toFixed(4));
-      decoction.lots = [...(decoction.lots || []), lot];
+      const outputItem = inventory.find(x => x.id === recipe.outputInventoryId);
       const when = new Date().toISOString();
-      const movements = [
-        { id: 'MV-' + Date.now() + '-powder', at: when, type: 'DECOCTION_INPUT', ingredient: powder.name, qty: p.fulfilled, unit: powder.unit, lotUses: p.lotUses, cost: p.cost, batchCount: batches, note: 'Coffee powder used in decoction batch.' },
-        { id: 'MV-' + Date.now() + '-water', at: when, type: 'DECOCTION_INPUT', ingredient: water.name, qty: w.fulfilled, unit: water.unit, lotUses: w.lotUses, cost: w.cost, batchCount: batches, note: 'Water input; 100 ml per batch retained by grounds as per SOP.' },
-        { id: 'MV-' + Date.now() + '-output', at: when, type: 'DECOCTION_OUTPUT', ingredient: decoction.name, qty: outputQty, unit: decoction.unit, lotId: lot.id, unitCost: lot.unitCost, totalCost, batchCount: batches, note: '250 g coffee powder + 1,100 ml water yields 1,000 ml decoction per batch.' }
-      ];
+      const movements = [];
+      let totalCost = 0;
+      for (const input of recipe.inputs) {
+        const item = inventory.find(x => x.id === input.inventoryId);
+        const required = Number(input.qty) * batches;
+        const result = consumeFromLots(item, required);
+        if (result.remaining > 0.00001) return curr;
+        totalCost += result.cost;
+        movements.push({ id: 'MV-' + Date.now() + '-' + movements.length, at: when, type: 'BOM_INPUT', recipe: recipe.name, ingredient: item.name, qty: result.fulfilled, unit: item.unit, lotUses: result.lotUses, cost: result.cost, batchCount: batches, note: 'Consumed FIFO input lots for secondary recipe production.' });
+      }
+      const outputQty = Number(recipe.yieldQty) * batches;
+      const lot = { id: 'LOT-' + (curr.nextLotId || 1), receivedAt: when, qty: outputQty, remaining: outputQty, unitCost: totalCost / outputQty, totalCost, supplier: 'Produced: ' + recipe.name, batchCount: batches, secondaryRecipeId: recipe.id, inputCosts: totalCost };
+      outputItem.onHand = Number((outputItem.onHand + outputQty).toFixed(4));
+      outputItem.lots = [...(outputItem.lots || []), lot];
+      movements.push({ id: 'MV-' + Date.now() + '-output', at: when, type: 'BOM_OUTPUT', recipe: recipe.name, ingredient: outputItem.name, qty: outputQty, unit: outputItem.unit, lotId: lot.id, unitCost: lot.unitCost, totalCost, batchCount: batches, note: 'Secondary recipe yield added as a separate costed output lot.' });
       return { ...curr, inventory, stockMovements: [...movements, ...(curr.stockMovements || [])], nextLotId: (curr.nextLotId || 1) + 1 };
     });
-    flash('Decoction batch recorded. Output lot carries its own batch cost.');
+    flash('Production recorded: ' + recipe.name + '. Output is costed from FIFO input lots.');
   }
-  function saveRecipeLine() {
+    function saveRecipeLine() {
     const qty = Number(recipeForm.qty);
     if (!recipeForm.ingredient.trim() || !Number.isFinite(qty) || qty <= 0) return flash('Enter an ingredient and a quantity above zero.');
     const stockItem = store.inventory.find(x => x.name.toLowerCase() === recipeForm.ingredient.trim().toLowerCase());
@@ -438,11 +466,21 @@ function App() {
         <button className="checkout" onClick={receiveStock}>Save purchase lot</button>
         <h3>Recent purchase lots</h3><div className="sales-list">{store.inventory.flatMap(item => (item.lots||[]).map(lot => ({...lot,ingredient:item.name,unit:item.unit}))).filter(lot => !lot.batchCount && !lot.reconciliationAdjustment).sort((a,b)=>String(b.receivedAt).localeCompare(String(a.receivedAt))).slice(0,30).map(lot => <article className="sale-row" key={lot.id}><div><strong>{lot.ingredient} · {lot.id}</strong><span>{new Date(lot.receivedAt).toLocaleString()} · Remaining {lot.remaining} {lot.unit}</span><small>Received {lot.qty} · Unit cost {money(lot.unitCost)} per {lot.unit} · Supplier: {lot.supplier || 'Not specified'}</small></div></article>)}</div>
       </section>}
-      {inventoryTab === 'Decoction' && <section className="admin-card"><h2>Prepare coffee decoction</h2><p>Primary SOP: 250 g coffee powder + 1,100 ml water produces approximately 1,000 ml decoction per batch.</p>
+      {inventoryTab === 'Decoction' && <section className="admin-card"><h2>Secondary Recipe / BOM Production</h2><p>Define a secondary recipe (inputs → prepared stock output), then produce batches. Each output becomes a separate FIFO cost lot. Existing coffee SOP is retained.</p>
+        <label>Select secondary recipe<select value={secondaryRecipeId} onChange={e => setSecondaryRecipeId(e.target.value)}>{(store.secondaryRecipes || INITIAL_SECONDARY_RECIPES).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
+        {(() => { const r=(store.secondaryRecipes || INITIAL_SECONDARY_RECIPES).find(x=>x.id===secondaryRecipeId); const out=r && store.inventory.find(x=>x.id===r.outputInventoryId); return r ? <div className="admin-card"><strong>{r.name} BOM</strong><p>Output: {out?.name || 'Missing output'} · Yield: {r.yieldQty} {out?.unit || ''} per batch</p>{r.inputs.map((input,i)=>{const item=store.inventory.find(x=>x.id===input.inventoryId);return <p key={i}>Input {i+1}: {item?.name || 'Missing stock item'} — {input.qty} {item?.unit || ''} per batch</p>})}</div> : null; })()}
         <label>Number of batches (1–20)<input type="number" min="1" max="20" step="1" value={prepBatches} onChange={e => setPrepBatches(e.target.value)}/></label>
-        <div className="sales-summary"><div><span>Coffee powder required</span><strong>{250 * (Number(prepBatches)||0)} g</strong></div><div><span>Water required</span><strong>{1100 * (Number(prepBatches)||0)} ml</strong></div><div><span>Expected decoction</span><strong>{1000 * (Number(prepBatches)||0)} ml</strong></div></div>
-        <button className="checkout" onClick={prepareDecoction}>Record decoction batch</button>
-        <p className="local-note">The batch is saved only if sufficient FIFO powder and water lots are available. Its output keeps a separately calculated batch cost.</p>
+        <button className="checkout" onClick={prepareDecoction}>Record production batch</button>
+        <p className="local-note">Production is blocked when an input has insufficient recorded stock or FIFO lots. No input costs are averaged; the produced output lot receives the actual consumed FIFO cost.</p>
+        <h3>Add a secondary recipe / BOM</h3>
+        <label>Recipe name<input value={secondaryDraft.name} onChange={e=>setSecondaryDraft(x=>({...x,name:e.target.value}))} placeholder="e.g. Masala tea premix"/></label>
+        <label>Output stock item<select value={secondaryDraft.outputInventoryId} onChange={e=>setSecondaryDraft(x=>({...x,outputInventoryId:e.target.value}))}>{store.inventory.map(item=><option key={item.id} value={item.id}>{item.name} ({item.unit})</option>)}</select></label>
+        <label>Yield quantity per batch<input type="number" min="0.0001" step="0.0001" value={secondaryDraft.yieldQty} onChange={e=>setSecondaryDraft(x=>({...x,yieldQty:e.target.value}))}/></label>
+        <label>Input 1<select value={secondaryDraft.inputInventoryId} onChange={e=>setSecondaryDraft(x=>({...x,inputInventoryId:e.target.value}))}>{store.inventory.map(item=><option key={item.id} value={item.id}>{item.name} ({item.unit})</option>)}</select></label>
+        <label>Input 1 quantity per batch<input type="number" min="0.0001" step="0.0001" value={secondaryDraft.inputQty} onChange={e=>setSecondaryDraft(x=>({...x,inputQty:e.target.value}))}/></label>
+        <label>Input 2 (optional)<select value={secondaryDraft.secondInputInventoryId} onChange={e=>setSecondaryDraft(x=>({...x,secondInputInventoryId:e.target.value}))}><option value="">None</option>{store.inventory.map(item=><option key={item.id} value={item.id}>{item.name} ({item.unit})</option>)}</select></label>
+        <label>Input 2 quantity per batch<input type="number" min="0" step="0.0001" value={secondaryDraft.secondInputQty} onChange={e=>setSecondaryDraft(x=>({...x,secondInputQty:e.target.value}))}/></label>
+        <button className="checkout" onClick={saveSecondaryRecipe}>Save secondary recipe BOM</button>
       </section>}
       {inventoryTab === 'Recipes' && <section className="admin-card"><h2>Recipe management</h2><p>Recipe units must match the ingredient stock units exactly.</p>
         <label>Menu product<select value={recipeProduct} onChange={e => setRecipeProduct(e.target.value)}>{store.menu.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
