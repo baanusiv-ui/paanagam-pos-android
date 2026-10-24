@@ -215,7 +215,13 @@ function App() {
   function consumeFromLots(item, requested) {
     let remaining = requested;
     const lotUses = [];
-    for (const lot of (item.lots || [])) {
+    // Enforce FIFO by receipt timestamp even if a restored backup has lots out of order.
+    const fifoLots = [...(item.lots || [])].sort((a, b) => {
+      const ta = Date.parse(a.receivedAt || '') || 0;
+      const tb = Date.parse(b.receivedAt || '') || 0;
+      return ta - tb;
+    });
+    for (const lot of fifoLots) {
       const available = Math.max(0, Number(lot.remaining) || 0);
       const take = Math.min(available, remaining);
       if (take > 0) {
@@ -233,7 +239,9 @@ function App() {
     const qty = Number(stockOutForm.qty);
     const target = store.inventory.find(x => x.id === stockOutForm.ingredientId);
     if (!target || !Number.isFinite(qty) || qty <= 0) return flash('Enter a valid stock-out quantity.');
-    if (qty > target.onHand) return flash('Stock-out exceeds recorded on-hand quantity.');
+    const lotAvailable = (target.lots || []).reduce((sum, lot) => sum + Math.max(0, Number(lot.remaining) || 0), 0);
+    const available = Math.min(Math.max(0, Number(target.onHand) || 0), lotAvailable);
+    if (qty > available + 0.00001) return flash('Stock-out exceeds available FIFO lot balance (' + available + ' ' + target.unit + '). Reconcile stock first.');
     setStore(curr => {
       const inventory = curr.inventory.map(x => ({ ...x, lots: (x.lots || []).map(l => ({ ...l })) }));
       const item = inventory.find(x => x.id === target.id);
