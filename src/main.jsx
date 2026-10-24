@@ -81,6 +81,18 @@ function App() {
   const today = new Date().toLocaleDateString();
   const todaySales = store.sales.filter(s => new Date(s.createdAt).toLocaleDateString() === today);
   const todayTotal = todaySales.reduce((s, x) => s + x.total, 0);
+  const todayCash = todaySales.filter(s => s.payment === 'Cash').reduce((sum, s) => sum + Number(s.total || 0), 0);
+  const todayUpi = todaySales.filter(s => s.payment === 'UPI').reduce((sum, s) => sum + Number(s.total || 0), 0);
+  const todayProductTotals = todaySales.reduce((acc, sale) => {
+    for (const item of (sale.items || [])) {
+      const key = item.name || 'Unnamed item';
+      if (!acc[key]) acc[key] = { qty: 0, amount: 0 };
+      acc[key].qty += Number(item.qty) || 0;
+      acc[key].amount += (Number(item.qty) || 0) * (Number(item.price) || 0);
+    }
+    return acc;
+  }, {});
+  const todayProductRows = Object.entries(todayProductTotals).sort((a, b) => b[1].qty - a[1].qty);
 
   function flash(text) { setMessage(text); window.setTimeout(() => setMessage(''), 2800); }
   function addToCart(product) {
@@ -335,6 +347,24 @@ function App() {
     {page === 'Sales' && <main className="page-content">
       <div className="section-heading"><div><h1>Sales history</h1><p>Stored locally on this device</p></div><button className="outline-button" onClick={exportBackup}>Export backup</button></div>
       <div className="sales-summary"><div><span>Today's collected</span><strong>{money(todayTotal)}</strong></div><div><span>Today's bills</span><strong>{todaySales.length}</strong></div></div>
+      <section className="admin-card">
+        <div className="admin-card-heading"><div><h2>Daily closing report</h2><p>{new Date().toLocaleDateString()} · Based on saved bills on this device</p></div><button className="outline-button small" onClick={() => {
+          const rows = [['Date', new Date().toLocaleDateString()], ['Total collected', todayTotal], ['Cash', todayCash], ['UPI', todayUpi], ['Bills', todaySales.length], [], ['Product', 'Quantity', 'Sales amount'], ...todayProductRows.map(([name, data]) => [name, data.qty, data.amount])];
+          const csv = rows.map(row => row.map(value => '"' + String(value ?? '').replace(/"/g, '""') + '"').join(',')).join('\\r\\n');
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a'); a.href = url; a.download = 'paanagam-daily-close-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
+          URL.revokeObjectURL(url);
+          flash('Daily closing CSV export started.');
+        }}>Export CSV</button></div>
+        <div className="sales-summary">
+          <div><span>Cash</span><strong>{money(todayCash)}</strong></div>
+          <div><span>UPI</span><strong>{money(todayUpi)}</strong></div>
+          <div><span>Total</span><strong>{money(todayTotal)}</strong></div>
+        </div>
+        {todayProductRows.length === 0 ? <p className="local-note">No completed bills for today yet.</p> : <div className="sales-list">{todayProductRows.map(([name, data]) => <article className="sale-row" key={name}><div><strong>{name}</strong><span>{data.qty} sold today</span></div><div className="sale-right"><strong>{money(data.amount)}</strong></div></article>)}</div>}
+        <p className="local-note">Closing figures include completed sales only. This report is stored locally and does not sync to the cloud.</p>
+      </section>
       {store.sales.length === 0 ? <div className="empty-state"><div>📒</div><h3>No sales recorded yet</h3><p>Completed POS bills appear here.</p></div> : <div className="sales-list">{store.sales.map(sale => <article className="sale-row" key={sale.id}><div><strong>{sale.id}</strong><span>{new Date(sale.createdAt).toLocaleString()}</span><small>{sale.items.map(i => i.name + ' ×' + i.qty).join(', ')}</small>{sale.customerKey && <small>Loyalty ID: {sale.customerKey} · stamps earned: {sale.loyaltyStampsEarned || 0}</small>}</div><div className="sale-right"><strong>{money(sale.total)}</strong><span className="payment-label">{sale.payment}</span></div></article>)}</div>}
     </main>}
 
