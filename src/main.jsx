@@ -71,6 +71,7 @@ function App() {
   const [recipeForm, setRecipeForm] = useState({ ingredient: 'Prepared decoction', qty: '25', unit: 'ml', note: '' });
   const [prepBatches, setPrepBatches] = useState('1');
   const [inventoryTab, setInventoryTab] = useState('Stock');
+  const [loyaltyCustomer, setLoyaltyCustomer] = useState('');
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(store)); } catch { setMessage('Storage is full. Export a backup and clear old sales.'); }
   }, [store]);
@@ -113,7 +114,9 @@ function App() {
       }
     }
 
-    const sale = { id: 'PG-' + Date.now().toString().slice(-8), createdAt: new Date().toISOString(), items: cart.map(x => ({ ...x })), total, payment };
+    const customerKey = loyaltyCustomer.trim();
+    const earnedStamps = customerKey ? cart.reduce((sum, item) => sum + (store.menu.find(m => m.id === item.id)?.category === 'Coffee' && item.price > 0 ? item.qty : 0), 0) : 0;
+    const sale = { id: 'PG-' + Date.now().toString().slice(-8), createdAt: new Date().toISOString(), items: cart.map(x => ({ ...x })), total, payment, customerKey: customerKey || undefined, loyaltyStampsEarned: earnedStamps };
     setStore(curr => {
       const inventory = curr.inventory.map(item => ({ ...item, lots: (item.lots || []).map(lot => ({ ...lot })) }));
       const movements = [];
@@ -126,11 +129,18 @@ function App() {
           movements.push({ id: 'MV-' + Date.now() + '-' + movements.length, at: new Date().toISOString(), type: 'SALE_CONSUMPTION', saleId: sale.id, product: sold.name, ingredient: target.name, qty: result.fulfilled, requestedQty: requested, unit: target.unit, lotUses: result.lotUses, cost: result.cost, insufficient: result.remaining > 0, missingQty: result.remaining, note: 'Consumed oldest purchase lots first; unit prices are not averaged.' });
         }
       }
-      return { ...curr, sales: [sale, ...curr.sales], inventory, stockMovements: [...movements.reverse(), ...(curr.stockMovements || [])] };
+      const loyalty = { ...(curr.loyalty || {}) };
+      if (customerKey && earnedStamps) {
+        const prior = loyalty[customerKey] || { stamps: 0, rewards: 0 };
+        const combined = Math.max(0, Number(prior.stamps) || 0) + earnedStamps;
+        loyalty[customerKey] = { stamps: combined % 10, rewards: (Math.max(0, Number(prior.rewards) || 0) + Math.floor(combined / 10)) };
+      }
+      return { ...curr, loyalty, sales: [sale, ...curr.sales], inventory, stockMovements: [...movements.reverse(), ...(curr.stockMovements || [])] };
     });
     setCart([]);
     setPage('POS');
-    flash('Sale saved on this device: ' + sale.id);
+    if (customerKey) setLoyaltyCustomer('');
+    flash('Sale saved on this device: ' + sale.id + (earnedStamps ? ' · ' + earnedStamps + ' coffee stamp(s) added.' : ''));
   }
   function exportBackup() {
     const blob = new Blob([JSON.stringify({ ...store, exportedAt: new Date().toISOString(), schema: 1 }, null, 2)], { type: 'application/json' });
@@ -296,6 +306,21 @@ function App() {
           <div className="qty-control"><button onClick={() => qtyChange(item.id, -1)}>−</button><span>{item.qty}</span><button onClick={() => qtyChange(item.id, 1)}>+</button></div>
           <b className="line-total">{money(item.price * item.qty)}</b>
         </div>)}</div>
+        <div className="loyalty-panel">
+          <label>Customer mobile or ID (optional)<input inputMode="tel" value={loyaltyCustomer} onChange={e => setLoyaltyCustomer(e.target.value)} placeholder="Enter customer ID for coffee rewards" /></label>
+          {loyaltyCustomer.trim() && <div className="loyalty-status">
+            <span>{Math.max(0, Number(store.loyalty?.[loyaltyCustomer.trim()]?.stamps) || 0)}/10 coffee stamps</span>
+            <strong>{Math.max(0, Number(store.loyalty?.[loyaltyCustomer.trim()]?.rewards) || 0)} free coffee reward(s)</strong>
+            {Array.from({length:10}, (_,i) => <i key={i} className={i < (Math.max(0, Number(store.loyalty?.[loyaltyCustomer.trim()]?.stamps) || 0)) ? 'stamp filled' : 'stamp'} />)}
+            {Number(store.loyalty?.[loyaltyCustomer.trim()]?.rewards) > 0 && <button className="outline-button small" onClick={() => {
+              const key = loyaltyCustomer.trim();
+              setStore(curr => ({...curr, loyalty:{...(curr.loyalty||{}), [key]:{stamps:Math.max(0,Number(curr.loyalty?.[key]?.stamps)||0), rewards:Math.max(0,(Number(curr.loyalty?.[key]?.rewards)||0)-1)}}}));
+              setCart(curr => { const found=curr.find(x=>x.id==='loyalty-free-coffee'); return found ? curr.map(x=>x.id==='loyalty-free-coffee'?{...x,qty:x.qty+1}:x) : [...curr,{id:'loyalty-free-coffee',name:'Loyalty Free Coffee',price:0,qty:1}]; });
+              flash('Free coffee added to the bill.');
+            }}>Redeem 1 free coffee</button>}
+          </div>}
+          <small>Buy 10 paid coffee drinks to earn 1 free coffee. Customer ID is stored on this device only.</small>
+        </div>
         <div className="bill-footer">
           <div className="subtotal"><span>Total</span><strong>{money(total)}</strong></div>
           <div className="pay-choice"><button className={payment === 'Cash' ? 'pay-active' : ''} onClick={() => setPayment('Cash')}>💵 Cash</button><button className={payment === 'UPI' ? 'pay-active' : ''} onClick={() => setPayment('UPI')}>▦ UPI</button></div>
@@ -308,7 +333,7 @@ function App() {
     {page === 'Sales' && <main className="page-content">
       <div className="section-heading"><div><h1>Sales history</h1><p>Stored locally on this device</p></div><button className="outline-button" onClick={exportBackup}>Export backup</button></div>
       <div className="sales-summary"><div><span>Today's collected</span><strong>{money(todayTotal)}</strong></div><div><span>Today's bills</span><strong>{todaySales.length}</strong></div></div>
-      {store.sales.length === 0 ? <div className="empty-state"><div>📒</div><h3>No sales recorded yet</h3><p>Completed POS bills appear here.</p></div> : <div className="sales-list">{store.sales.map(sale => <article className="sale-row" key={sale.id}><div><strong>{sale.id}</strong><span>{new Date(sale.createdAt).toLocaleString()}</span><small>{sale.items.map(i => i.name + ' ×' + i.qty).join(', ')}</small></div><div className="sale-right"><strong>{money(sale.total)}</strong><span className="payment-label">{sale.payment}</span></div></article>)}</div>}
+      {store.sales.length === 0 ? <div className="empty-state"><div>📒</div><h3>No sales recorded yet</h3><p>Completed POS bills appear here.</p></div> : <div className="sales-list">{store.sales.map(sale => <article className="sale-row" key={sale.id}><div><strong>{sale.id}</strong><span>{new Date(sale.createdAt).toLocaleString()}</span><small>{sale.items.map(i => i.name + ' ×' + i.qty).join(', ')}</small>{sale.customerKey && <small>Loyalty ID: {sale.customerKey} · stamps earned: {sale.loyaltyStampsEarned || 0}</small>}</div><div className="sale-right"><strong>{money(sale.total)}</strong><span className="payment-label">{sale.payment}</span></div></article>)}</div>}
     </main>}
 
     {page === 'Admin' && <main className="page-content">
