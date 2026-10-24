@@ -29,7 +29,10 @@ const INITIAL_INVENTORY = [
 const INITIAL_SECONDARY_RECIPES = [{ id: 'decoction-bom', name: 'Coffee Decoction', outputInventoryId: 'decoction', yieldQty: 1000, inputs: [{ inventoryId: 'coffee-powder', qty: 250 }, { inventoryId: 'water', qty: 1100 }] }];
 const KEY = 'paanagam.pos.v1';
 const DEFAULT_PIN = '1234';
+const CLOUD_CONFIG_KEY = 'paanagam.cloud.v1';
+const readCloudConfig = () => { try { return JSON.parse(localStorage.getItem(CLOUD_CONFIG_KEY) || '{"endpoint":"","token":"","autoSync":true}'); } catch { return { endpoint: '', token: '', autoSync: true }; } };
 const money = n => '₹' + Number(n || 0).toFixed(2).replace(/\.00$/, '');
+function getDeviceId() { try { let id = localStorage.getItem('paanagam.device.id'); if (!id) { id = 'PG-DEVICE-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2)); localStorage.setItem('paanagam.device.id', id); } return id; } catch { return 'PG-DEVICE-LOCAL'; } }
 function readStore() {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -67,6 +70,9 @@ function App() {
   const [message, setMessage] = useState('');
   const [editing, setEditing] = useState(null);
   const [restoreText, setRestoreText] = useState('');
+  const [cloudConfig, setCloudConfig] = useState(readCloudConfig);
+  const [cloudStatus, setCloudStatus] = useState('Cloud backup not configured');
+  const [cloudBusy, setCloudBusy] = useState(false);
   const [stockForm, setStockForm] = useState({ ingredientId: 'coffee-powder', qty: '', totalCost: '', supplier: '' });
   const [stockOutForm, setStockOutForm] = useState({ ingredientId: 'coffee-powder', qty: '' });
   const [recipeProduct, setRecipeProduct] = useState('filter-coffee');
@@ -80,6 +86,26 @@ function App() {
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(store)); } catch { setMessage('Storage is full. Export a backup and clear old sales.'); }
   }, [store]);
+  useEffect(() => { try { localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cloudConfig)); } catch {} }, [cloudConfig]);
+  useEffect(() => {
+    if (!cloudConfig.autoSync || !cloudConfig.endpoint.trim() || !cloudConfig.token.trim()) { setCloudStatus(cloudConfig.endpoint.trim() ? 'Cloud sync needs endpoint and token' : 'Local-only · cloud endpoint not configured'); return; }
+    if (!navigator.onLine) { setCloudStatus('Offline · changes saved locally; cloud sync waiting'); return; }
+    setCloudStatus('Local data saved · cloud sync queued');
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(cloudConfig.endpoint.trim(), { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cloudConfig.token.trim() }, body: JSON.stringify({ app: 'paanagam-pos-android', schema: 1, deviceId: getDeviceId(), updatedAt: new Date().toISOString(), payload: store }) });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        setCloudStatus('Cloud backup synced · ' + new Date().toLocaleTimeString());
+      } catch (error) { setCloudStatus('Cloud sync failed (' + error.message + ') · local data is safe'); }
+    }, 1800);
+    return () => window.clearTimeout(timer);
+  }, [store, cloudConfig]);
+  useEffect(() => {
+    const online = () => setCloudStatus('Online · pending cloud sync');
+    const offline = () => setCloudStatus('Offline · changes remain saved locally');
+    window.addEventListener('online', online); window.addEventListener('offline', offline);
+    return () => { window.removeEventListener('online', online); window.removeEventListener('offline', offline); };
+  }, []);
   const categories = useMemo(() => ['All', ...new Set(store.menu.filter(m => m.active).map(m => m.category))], [store.menu]);
   const visibleMenu = store.menu.filter(m => m.active && (category === 'All' || m.category === category));
   const total = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
@@ -168,6 +194,32 @@ function App() {
     setPage('POS');
     if (customerKey) setLoyaltyCustomer('');
     flash('Sale saved on this device: ' + sale.id + (earnedStamps ? ' · ' + earnedStamps + ' coffee stamp(s) added.' : ''));
+  }
+  async function syncCloudNow() {
+    if (!cloudConfig.endpoint.trim() || !cloudConfig.token.trim()) return flash('Set the secured cloud endpoint and bearer token first.');
+    if (!navigator.onLine) return flash('Device is offline. Data remains saved locally and will sync when online.');
+    setCloudBusy(true); setCloudStatus('Syncing local data to cloud…');
+    try {
+      const response = await fetch(cloudConfig.endpoint.trim(), { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cloudConfig.token.trim() }, body: JSON.stringify({ app: 'paanagam-pos-android', schema: 1, deviceId: getDeviceId(), updatedAt: new Date().toISOString(), payload: store }) });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      setCloudStatus('Cloud backup synced · ' + new Date().toLocaleString()); flash('Cloud backup completed.');
+    } catch (error) { setCloudStatus('Cloud sync failed (' + error.message + ') · local data is safe'); flash('Cloud backup failed. Check endpoint/token; local data is safe.'); }
+    finally { setCloudBusy(false); }
+  }
+  async function restoreCloudNow() {
+    if (!cloudConfig.endpoint.trim() || !cloudConfig.token.trim()) return flash('Set the secured cloud endpoint and bearer token first.');
+    if (!navigator.onLine) return flash('Cloud restore requires internet.');
+    if (!window.confirm('Restore cloud data to this device? Current local data will be replaced. Export a local backup first.')) return;
+    setCloudBusy(true);
+    try {
+      const url = new URL(cloudConfig.endpoint.trim()); url.searchParams.set('deviceId', getDeviceId());
+      const response = await fetch(url.toString(), { headers: { 'Authorization': 'Bearer ' + cloudConfig.token.trim() } });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const data = await response.json(); const parsed = data.payload || data;
+      if (!Array.isArray(parsed.menu) || !Array.isArray(parsed.sales) || !Array.isArray(parsed.inventory)) throw new Error('Cloud response must include menu, sales and inventory payload.');
+      setStore({ ...readStore(), ...parsed }); setCloudStatus('Cloud data restored · ' + new Date().toLocaleString()); flash('Cloud backup restored to this device.');
+    } catch (error) { setCloudStatus('Cloud restore failed (' + error.message + ')'); flash('Cloud restore failed. Check the endpoint response format.'); }
+    finally { setCloudBusy(false); }
   }
   function exportBackup() {
     const blob = new Blob([JSON.stringify({ ...store, exportedAt: new Date().toISOString(), schema: 1 }, null, 2)], { type: 'application/json' });
@@ -537,6 +589,7 @@ function App() {
           <p className="local-note">A shortage consumes oldest FIFO lots first. A surplus is recorded as a separate zero-cost adjustment lot marked cost unknown; it is not treated as a purchase.</p>
         </section>
         <section className="admin-card"><h2>Change admin PIN</h2><p>Use 4–8 digits. Keep this PIN private.</p><div className="inline-form"><input type="password" inputMode="numeric" maxLength="8" placeholder="New PIN" value={newPin} onChange={e => setNewPin(e.target.value.replace(/\D/g, ''))}/><button className="solid-small" onClick={changePin}>Save PIN</button></div></section>
+        <section className="admin-card"><h2>Live cloud backup & local storage</h2><p>Sales, menu, stock lots, recipes, loyalty and movement history are saved locally on this Android device first. Configure a secured HTTPS backup endpoint to automatically sync after changes when internet is available. No cloud credentials are pre-filled.</p><div className="sales-summary"><div><span>Local storage</span><strong>Active</strong></div><div><span>Cloud status</span><strong style={{fontSize:'14px'}}>{cloudStatus}</strong></div></div><label>Secured HTTPS cloud endpoint<input type="url" value={cloudConfig.endpoint} onChange={e=>setCloudConfig(x=>({...x,endpoint:e.target.value}))} placeholder="https://your-project.supabase.co/functions/v1/paanagam-backup" /></label><label>Bearer token / function secret<input type="password" autoComplete="off" value={cloudConfig.token} onChange={e=>setCloudConfig(x=>({...x,token:e.target.value}))} placeholder="Paste the secret for your secured backup endpoint" /></label><label style={{display:'flex',alignItems:'center',gap:'9px',margin:'12px 0'}}><input style={{width:'auto'}} type="checkbox" checked={!!cloudConfig.autoSync} onChange={e=>setCloudConfig(x=>({...x,autoSync:e.target.checked}))}/> Auto-sync changes when online</label><div className="button-pair"><button className="outline-button" disabled={cloudBusy} onClick={syncCloudNow}>{cloudBusy?'Working…':'Back up to cloud now'}</button><button className="outline-button" disabled={cloudBusy} onClick={restoreCloudNow}>Restore from cloud</button></div><p className="local-note">For security, use a private server/Edge Function that validates this bearer token and stores one backup per device. Do not use a public table or expose a service-role key in the app. Automatic cloud backup activates only after a valid endpoint and token are configured.</p></section>
         <section className="admin-card"><h2>Backup and restore</h2><p>Export a JSON backup regularly. Restore replaces the local menu and sales with the backup contents.</p><div className="button-pair"><button className="outline-button" onClick={exportBackup}>Download backup</button><button className="outline-button" onClick={() => document.getElementById('backup-file').click()}>Choose backup file</button><input id="backup-file" className="hidden" type="file" accept="application/json,.json" onChange={e => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = () => setRestoreText(String(reader.result || '')); reader.readAsText(file); }}} /></div>
           <textarea value={restoreText} onChange={e => setRestoreText(e.target.value)} placeholder="Or paste backup JSON here..." rows="4" /><button className="checkout" onClick={restoreBackup} disabled={!restoreText.trim()}>Restore backup</button></section>
       </div>}
