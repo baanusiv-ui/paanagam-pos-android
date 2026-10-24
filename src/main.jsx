@@ -422,6 +422,48 @@ function App() {
       {store.sales.length === 0 ? <div className="empty-state"><div>📒</div><h3>No sales recorded yet</h3><p>Completed POS bills appear here.</p></div> : <div className="sales-list">{store.sales.map(sale => <article className="sale-row" key={sale.id}><div><strong>{sale.id}</strong><span>{new Date(sale.createdAt).toLocaleString()}</span><small>{sale.items.map(i => i.name + ' ×' + i.qty).join(', ')}</small>{sale.customerKey && <small>Loyalty ID: {sale.customerKey} · stamps earned: {sale.loyaltyStampsEarned || 0}</small>}</div><div className="sale-right"><strong>{money(sale.total)}</strong><span className="payment-label">{sale.payment}</span></div></article>)}</div>}
     </main>}
 
+    {page === 'Inventory' && <main className="page-content">
+      <div className="section-heading"><div><h1>Stock & Kitchen</h1><p>Separate purchase lots · FIFO costing · local offline ledger</p></div><button className="outline-button" onClick={exportBackup}>Export backup</button></div>
+      <div className="category-row">
+        {['Stock','Purchases','Decoction','Recipes','Stock out','Movements'].map(tab => <button key={tab} className={inventoryTab === tab ? 'chip active' : 'chip'} onClick={() => setInventoryTab(tab)}>{tab}</button>)}
+      </div>
+      {inventoryTab === 'Stock' && <section className="admin-card"><h2>Current ingredient stock</h2><p>Recorded quantity is shown alongside the sum of remaining FIFO lots. Investigate any difference before live trading.</p>
+        <div className="sales-list">{store.inventory.map(item => <article className="sale-row" key={item.id}><div><strong>{item.name}</strong><span>Recorded: {Number(item.onHand || 0).toFixed(3).replace(/\.?0+$/,'')} {item.unit}</span><small>FIFO lots: {(item.lots || []).reduce((s,l) => s + Math.max(0,Number(l.remaining)||0),0).toFixed(3).replace(/\.?0+$/,'')} {item.unit} · {(item.lots || []).filter(l => Number(l.remaining)>0).length} active lot(s)</small></div></article>)}</div>
+      </section>}
+      {inventoryTab === 'Purchases' && <section className="admin-card"><h2>Receive purchase stock</h2><p>Every receipt becomes a separate price lot. Old and new prices are never averaged.</p>
+        <label>Ingredient<select value={stockForm.ingredientId} onChange={e => setStockForm(x => ({...x,ingredientId:e.target.value}))}>{store.inventory.map(item => <option key={item.id} value={item.id}>{item.name} ({item.unit})</option>)}</select></label>
+        <label>Quantity received<input type="number" min="0.0001" step="0.0001" value={stockForm.qty} onChange={e => setStockForm(x => ({...x,qty:e.target.value}))} placeholder="Quantity in selected unit"/></label>
+        <label>Total purchase cost (₹)<input type="number" min="0" step="0.01" value={stockForm.totalCost} onChange={e => setStockForm(x => ({...x,totalCost:e.target.value}))} placeholder="Total cost for this lot"/></label>
+        <label>Supplier / source (optional)<input value={stockForm.supplier} onChange={e => setStockForm(x => ({...x,supplier:e.target.value}))} placeholder="Supplier name"/></label>
+        <button className="checkout" onClick={receiveStock}>Save purchase lot</button>
+        <h3>Recent purchase lots</h3><div className="sales-list">{store.inventory.flatMap(item => (item.lots||[]).map(lot => ({...lot,ingredient:item.name,unit:item.unit}))).filter(lot => !lot.batchCount && !lot.reconciliationAdjustment).sort((a,b)=>String(b.receivedAt).localeCompare(String(a.receivedAt))).slice(0,30).map(lot => <article className="sale-row" key={lot.id}><div><strong>{lot.ingredient} · {lot.id}</strong><span>{new Date(lot.receivedAt).toLocaleString()} · Remaining {lot.remaining} {lot.unit}</span><small>Received {lot.qty} · Unit cost {money(lot.unitCost)} per {lot.unit} · Supplier: {lot.supplier || 'Not specified'}</small></div></article>)}</div>
+      </section>}
+      {inventoryTab === 'Decoction' && <section className="admin-card"><h2>Prepare coffee decoction</h2><p>Primary SOP: 250 g coffee powder + 1,100 ml water produces approximately 1,000 ml decoction per batch.</p>
+        <label>Number of batches (1–20)<input type="number" min="1" max="20" step="1" value={prepBatches} onChange={e => setPrepBatches(e.target.value)}/></label>
+        <div className="sales-summary"><div><span>Coffee powder required</span><strong>{250 * (Number(prepBatches)||0)} g</strong></div><div><span>Water required</span><strong>{1100 * (Number(prepBatches)||0)} ml</strong></div><div><span>Expected decoction</span><strong>{1000 * (Number(prepBatches)||0)} ml</strong></div></div>
+        <button className="checkout" onClick={prepareDecoction}>Record decoction batch</button>
+        <p className="local-note">The batch is saved only if sufficient FIFO powder and water lots are available. Its output keeps a separately calculated batch cost.</p>
+      </section>}
+      {inventoryTab === 'Recipes' && <section className="admin-card"><h2>Recipe management</h2><p>Recipe units must match the ingredient stock units exactly.</p>
+        <label>Menu product<select value={recipeProduct} onChange={e => setRecipeProduct(e.target.value)}>{store.menu.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+        <div className="sales-list">{(store.recipes?.[recipeProduct]||[]).map((line,i)=><article className="sale-row" key={recipeProduct+'-'+i}><div><strong>{line.ingredient}</strong><span>{line.qty} {line.unit} per menu item</span><small>{line.note||''}</small></div><button className="text-button danger" onClick={()=>deleteRecipeLine(recipeProduct,i)}>Remove</button></article>)}</div>
+        <label>Ingredient<select value={recipeForm.ingredient} onChange={e=>{const v=e.target.value;const item=store.inventory.find(x=>x.name===v);setRecipeForm(x=>({...x,ingredient:v,unit:item?.unit||x.unit}));}}>{store.inventory.map(item=><option key={item.id} value={item.name}>{item.name} ({item.unit})</option>)}</select></label>
+        <label>Quantity per menu item<input type="number" min="0.0001" step="0.0001" value={recipeForm.qty} onChange={e=>setRecipeForm(x=>({...x,qty:e.target.value}))}/></label>
+        <label>Unit<select value={recipeForm.unit} onChange={e=>setRecipeForm(x=>({...x,unit:e.target.value}))}>{['g','kg','ml','L','unit'].map(u=><option key={u}>{u}</option>)}</select></label>
+        <label>Note (optional)<input value={recipeForm.note} onChange={e=>setRecipeForm(x=>({...x,note:e.target.value}))} placeholder="SOP or portion note"/></label>
+        <button className="checkout" onClick={saveRecipeLine}>Add recipe line</button>
+        <p className="local-note">Only Filter Coffee has the starter SOP configured by default: 25 ml decoction, 75 ml milk and 5 g sugar per cup. Configure and verify every other product before live use.</p>
+      </section>}
+      {inventoryTab === 'Stock out' && <section className="admin-card"><h2>Manual stock out</h2><p>Use for recorded wastage or other stock removal. This consumes oldest FIFO lots first.</p>
+        <label>Ingredient<select value={stockOutForm.ingredientId} onChange={e=>setStockOutForm(x=>({...x,ingredientId:e.target.value}))}>{store.inventory.map(item=><option key={item.id} value={item.id}>{item.name} ({item.unit})</option>)}</select></label>
+        <label>Quantity to remove<input type="number" min="0.0001" step="0.0001" value={stockOutForm.qty} onChange={e=>setStockOutForm(x=>({...x,qty:e.target.value}))}/></label>
+        <button className="checkout" onClick={recordStockOut}>Record stock out</button>
+      </section>}
+      {inventoryTab === 'Movements' && <section className="admin-card"><h2>Stock movement history</h2><p>Receipts, decoction batches, sale consumption, manual stock out and physical reconciliation.</p>
+        {store.stockMovements.length===0 ? <p className="local-note">No stock movements recorded yet.</p> : <div className="sales-list">{store.stockMovements.map(m=><article className="sale-row" key={m.id}><div><strong>{m.type} · {m.ingredient}</strong><span>{new Date(m.at).toLocaleString()} · {m.qty} {m.unit||''}</span><small>{m.lotId ? 'Lot '+m.lotId+' · ' : ''}{m.totalCost != null ? 'Total cost '+money(m.totalCost)+' · ' : ''}{m.note||''}</small></div></article>)}</div>}
+      </section>}
+    </main>}
+
     {page === 'Admin' && <main className="page-content">
       {!adminOpen ? <div className="admin-lock"><div className="lock-icon">🔐</div><h1>Admin access</h1><p>Enter the admin PIN to manage the menu and backups.</p><form onSubmit={e => { e.preventDefault(); unlockAdmin(); }}><input aria-label="Admin PIN" type="password" inputMode="numeric" maxLength="8" value={pinEntry} onChange={e => setPinEntry(e.target.value.replace(/\D/g, ''))} placeholder="Enter PIN" /><button className="checkout">Unlock admin</button></form><small>Starter default PIN: 1234. Change it after first login.</small></div> :
       <div className="admin-content"><div className="section-heading"><div><h1>Admin settings</h1><p>Menu, security and device backup</p></div><button className="text-button" onClick={() => { setAdminOpen(false); setPage('POS'); }}>Lock</button></div>
