@@ -63,6 +63,51 @@ interface PaanagamDao {
     @Query("SELECT COALESCE(SUM(remainingBaseUnits), 0) FROM stock_lots WHERE ingredientId = :ingredientId AND location = :location")
     suspend fun stockBalance(ingredientId: String, location: String): Long
 
+
+    @Transaction
+    suspend fun consumeFifo(ingredientId: String, location: String, quantity: Long, referenceId: String, movementType: String, at: Long): Long {
+        require(quantity > 0)
+        val lots = fifoLots(ingredientId, location)
+        require(lots.sumOf { it.remainingBaseUnits } >= quantity) { "Insufficient stock" }
+        var left = quantity
+        var totalCost = 0L
+        lots.forEach { lot ->
+            if (left > 0) {
+                val take = minOf(left, lot.remainingBaseUnits)
+                updateLotBalance(lot.id, lot.remainingBaseUnits - take)
+                totalCost += take * lot.unitCostPaise
+                insertStockMovement(StockMovement(UUID.randomUUID().toString(), ingredientId, lot.id, movementType, location, "", take, lot.unitCostPaise, referenceId, at))
+                left -= take
+            }
+        }
+        return totalCost
+    }
+
+    @Transaction
+    suspend fun produceCoffeeDecoction(batch: ProductionBatch, powderId: String, waterId: String, decoctionId: String) {
+        require(batch.inputPowderGrams == 250L && batch.inputWaterMl == 1100L && batch.outputDecoctionMl == 1000L && batch.retainedGroundsMl == 100L)
+        val powder = ingredient(powderId) ?: error("Coffee powder not found")
+        val water = ingredient(waterId) ?: error("Water not found")
+        val decoction = ingredient(decoctionId) ?: error("Decoction ingredient not found")
+        require(powder.isCoffeePowder && powder.baseUnit == "g" && water.baseUnit == "ml" && decoction.baseUnit == "ml")
+        val powderCost = consumeFifo(powderId, "KITCHEN", 250000L, batch.id, "PRODUCTION_CONSUMPTION", batch.producedAt)
+        val waterCost = consumeFifo(waterId, "KITCHEN", 1100000L, batch.id, "PRODUCTION_CONSUMPTION", batch.producedAt)
+        val totalCost = powderCost + waterCost
+        insertProductionBatch(batch)
+        insertProductionInput(ProductionInput(UUID.randomUUID().toString(), batch.id, powderId, 250000L, powderCost))
+        insertProductionInput(ProductionInput(UUID.randomUUID().toString(), batch.id, waterId, 1100000L, waterCost))
+        val perMlCost = totalCost / 1000L
+        val lot = StockLot(UUID.randomUUID().toString(), decoctionId, "KITCHEN", batch.producedAt, 1000000L, 1000000L, "ml", perMlCost)
+        insertStockLot(lot)
+        insertStockMovement(StockMovement(UUID.randomUUID().toString(), decoctionId, lot.id, "PRODUCTION_OUTPUT", "", "KITCHEN", 1000000L, perMlCost, batch.id, batch.producedAt))
+    }
+
+    @Transaction
+    suspend fun saveWastage(item: WastageRecord) {
+        val cost = consumeFifo(item.ingredientId, item.location, item.quantityBaseUnits, item.id, "WASTAGE", item.recordedAt)
+        insertWastage(item.copy(costPaise = cost))
+    }
+
     @Transaction
     suspend fun receivePurchase(purchase: Purchase, lines: List<PurchaseLine>, lots: List<StockLot>) {
         require(lines.isNotEmpty() && lines.size == lots.size)
