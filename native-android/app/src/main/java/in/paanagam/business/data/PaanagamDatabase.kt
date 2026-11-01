@@ -46,6 +46,8 @@ interface PaanagamDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertStockLot(item: StockLot)
     @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertStockTransfer(item: StockTransfer)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertStockMovement(item: StockMovement)
     @Query("SELECT * FROM stock_lots WHERE ingredientId = :ingredientId AND location = :location AND remainingBaseUnits > 0 ORDER BY receivedAt ASC")
     suspend fun fifoLots(ingredientId: String, location: String): List<StockLot>
@@ -55,13 +57,16 @@ interface PaanagamDao {
     suspend fun stockBalance(ingredientId: String, location: String): Long
 
     @Transaction
-    suspend fun receivePurchase(purchase: Purchase, line: PurchaseLine, lot: StockLot) {
-        require(line.quantityBaseUnits > 0 && line.unitCostPaise >= 0)
-        require(lot.location == "STORE" && lot.remainingBaseUnits == line.quantityBaseUnits)
+    suspend fun receivePurchase(purchase: Purchase, lines: List<PurchaseLine>, lots: List<StockLot>) {
+        require(lines.isNotEmpty() && lines.size == lots.size)
         insertPurchase(purchase)
-        insertPurchaseLine(line)
-        insertStockLot(lot)
-        insertStockMovement(StockMovement(UUID.randomUUID().toString(), line.ingredientId, lot.id, "PURCHASE_RECEIPT", "", "STORE", line.quantityBaseUnits, line.unitCostPaise, purchase.id, purchase.purchasedAt))
+        lines.zip(lots).forEach { (line, lot) ->
+            require(line.quantityBaseUnits > 0 && line.unitCostPaise >= 0)
+            require(lot.location == "STORE" && lot.remainingBaseUnits == line.quantityBaseUnits && lot.id == line.lotId)
+            insertPurchaseLine(line)
+            insertStockLot(lot)
+            insertStockMovement(StockMovement(UUID.randomUUID().toString(), line.ingredientId, lot.id, "PURCHASE_RECEIPT", "", "STORE", line.quantityBaseUnits, line.unitCostPaise, purchase.id, purchase.purchasedAt))
+        }
     }
 
     @Transaction
@@ -70,6 +75,7 @@ interface PaanagamDao {
         val item = ingredient(ingredientId) ?: error("Ingredient not found")
         if (item.isCoffeePowder) require(quantityBaseUnits % 250L == 0L) { "Coffee powder transfers must be in 250 g multiples" }
         require(transfer.fromLocation != transfer.toLocation && transfer.fromLocation in listOf("STORE", "KITCHEN") && transfer.toLocation in listOf("STORE", "KITCHEN"))
+        insertStockTransfer(transfer)
         val lots = fifoLots(ingredientId, transfer.fromLocation)
         require(lots.sumOf { it.remainingBaseUnits } >= quantityBaseUnits) { "Insufficient stock" }
         var remaining = quantityBaseUnits
