@@ -24,6 +24,15 @@ data class StockMovement(@PrimaryKey val id: String, val ingredientId: String, v
 @Entity(tableName = "stock_lots")
 data class StockLot(@PrimaryKey val id: String, val ingredientId: String, val location: String, val receivedAt: Long, val qtyBaseUnits: Long, val remainingBaseUnits: Long, val unit: String, val unitCostPaise: Long, val sourceLotId: String? = null)
 
+@Entity(tableName = "production_batches")
+data class ProductionBatch(@PrimaryKey val id: String, val productName: String, val producedAt: Long, val inputPowderGrams: Long, val inputWaterMl: Long, val outputDecoctionMl: Long, val retainedGroundsMl: Long, val status: String = "COMPLETED")
+
+@Entity(tableName = "production_inputs")
+data class ProductionInput(@PrimaryKey val id: String, val batchId: String, val ingredientId: String, val quantityBaseUnits: Long, val costPaise: Long)
+
+@Entity(tableName = "wastage_records")
+data class WastageRecord(@PrimaryKey val id: String, val ingredientId: String, val location: String, val quantityBaseUnits: Long, val reason: String, val recordedAt: Long, val costPaise: Long)
+
 @Entity(tableName = "sales")
 data class Sale(@PrimaryKey val id: String, val createdAt: Long, val totalPaise: Long, val paymentMethod: String, val status: String = "COMPLETED", val syncState: String = "LOCAL")
 
