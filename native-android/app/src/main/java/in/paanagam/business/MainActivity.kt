@@ -99,6 +99,7 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                     "POS", "Menu" -> PosScreen(db)
                     "Recipes & BOM / SOP", "SOP Library" -> SopScreen(sops)
                     "Inventory", "Purchases", "Store → Kitchen", "Kitchen Stock" -> InventoryScreen(db, selected)
+                    "Production", "Wastage" -> ProductionScreen(db)
                     else -> ModuleScreen(selected)
                 }
             }
