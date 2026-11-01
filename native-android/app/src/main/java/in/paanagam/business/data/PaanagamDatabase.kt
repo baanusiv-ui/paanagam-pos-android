@@ -33,6 +33,13 @@ interface PaanagamDao {
     @Insert
     suspend fun completeSopCheck(check: SopCheck)
 
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertProductionBatch(item: ProductionBatch)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertProductionInput(item: ProductionInput)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertWastage(item: WastageRecord)
+
     @Query("SELECT * FROM ingredients WHERE active = 1 ORDER BY name")
     fun ingredients(): Flow<List<Ingredient>>
     @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -94,7 +101,7 @@ interface PaanagamDao {
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class], version = 3, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class], version = 4, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
