@@ -16,9 +16,9 @@ interface PaanagamDao {
     suspend fun saveCatalog(items: List<CatalogItem>)
     @Insert
     suspend fun recordSale(sale: Sale)
-    @Query("SELECT * FROM sales ORDER BY createdAt DESC")
+    @Insert suspend fun recordSaleLines(lines: List<SaleLine>)\n    @Transaction suspend fun completeSale(sale: Sale, lines: List<SaleLine>) { recordSale(sale); recordSaleLines(lines) }\n    @Query("SELECT * FROM sales ORDER BY createdAt DESC")
     fun sales(): Flow<List<Sale>>
-    @Query("SELECT * FROM sop_documents ORDER BY category, title")
+    @Query("SELECT * FROM sale_lines WHERE saleId = :saleId")\n    suspend fun saleLines(saleId: String): List<SaleLine>\n    @Query("SELECT * FROM sop_documents ORDER BY category, title")
     fun sops(): Flow<List<SopDocument>>
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveSop(sop: SopDocument)
@@ -28,7 +28,7 @@ interface PaanagamDao {
     suspend fun fifoLots(ingredientId: String, location: String): List<StockLot>
 }
 
-@Database(entities = [CatalogItem::class, StockLot::class, Sale::class, SopDocument::class, SopCheck::class], version = 1, exportSchema = true)
+@Database(entities = [CatalogItem::class, StockLot::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class], version = 2, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
