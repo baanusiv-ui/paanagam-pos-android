@@ -73,7 +73,7 @@ interface PaanagamDao {
     suspend fun transferFifo(transfer: StockTransfer, ingredientId: String, quantityBaseUnits: Long) {
         require(quantityBaseUnits > 0)
         val item = ingredient(ingredientId) ?: error("Ingredient not found")
-        if (item.isCoffeePowder) require(quantityBaseUnits % 250L == 0L) { "Coffee powder transfers must be in 250 g multiples" }
+        if (item.isCoffeePowder) require(quantityBaseUnits % 250000L == 0L) { "Coffee powder transfers must be in 250 g multiples" }
         require(transfer.fromLocation != transfer.toLocation && transfer.fromLocation in listOf("STORE", "KITCHEN") && transfer.toLocation in listOf("STORE", "KITCHEN"))
         insertStockTransfer(transfer)
         val lots = fifoLots(ingredientId, transfer.fromLocation)
