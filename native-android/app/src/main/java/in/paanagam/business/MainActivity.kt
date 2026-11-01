@@ -89,6 +89,7 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                     "Dashboard" -> DashboardScreen()
                     "POS", "Menu" -> PosScreen(db)
                     "Recipes & BOM / SOP", "SOP Library" -> SopScreen(sops)
+                    "Inventory", "Purchases", "Store → Kitchen", "Kitchen Stock" -> InventoryScreen(db, selected)
                     else -> ModuleScreen(selected)
                 }
             }
