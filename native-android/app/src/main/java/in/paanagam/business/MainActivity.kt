@@ -46,10 +46,19 @@ private val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
+
+private val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS production_batches (id TEXT NOT NULL PRIMARY KEY, productName TEXT NOT NULL, producedAt INTEGER NOT NULL, inputPowderGrams INTEGER NOT NULL, inputWaterMl INTEGER NOT NULL, outputDecoctionMl INTEGER NOT NULL, retainedGroundsMl INTEGER NOT NULL, status TEXT NOT NULL)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS production_inputs (id TEXT NOT NULL PRIMARY KEY, batchId TEXT NOT NULL, ingredientId TEXT NOT NULL, quantityBaseUnits INTEGER NOT NULL, costPaise INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS wastage_records (id TEXT NOT NULL PRIMARY KEY, ingredientId TEXT NOT NULL, location TEXT NOT NULL, quantityBaseUnits INTEGER NOT NULL, reason TEXT NOT NULL, recordedAt INTEGER NOT NULL, costPaise INTEGER NOT NULL)")
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
+        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
         setContent { PaanagamApp(db) }
     }
 }
