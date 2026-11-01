@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import in.paanagam.business.data.PaanagamDatabase
 import in.paanagam.business.data.SopDocument
 
@@ -26,10 +28,16 @@ private val Espresso = Color(0xFF24140D)
 private val Ivory = Color(0xFFFFF4DF)
 private val Gold = Color(0xFFDDB36C)
 
+private val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS sale_lines (id TEXT NOT NULL PRIMARY KEY, saleId TEXT NOT NULL, itemId TEXT NOT NULL, itemName TEXT NOT NULL, quantity INTEGER NOT NULL, unitPricePaise INTEGER NOT NULL, lineTotalPaise INTEGER NOT NULL)")
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").build()
+        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2).build()
         setContent { PaanagamApp(db) }
     }
 }
@@ -66,7 +74,8 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                     Text(selected, color = Ivory, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                 }
                 when (selected) {
-                    "Dashboard" -> DashboardScreen()\n                    "POS", "Menu" -> PosScreen(db)
+                    "Dashboard" -> DashboardScreen()
+                    "POS", "Menu" -> PosScreen(db)
                     "Recipes & BOM / SOP", "SOP Library" -> SopScreen(sops)
                     else -> ModuleScreen(selected)
                 }
