@@ -81,7 +81,7 @@ fun InventoryScreen(db: PaanagamDatabase, mode: String) {
                         }
                         OutlinedTextField(supplier, { supplier = it }, label = { Text("Supplier") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                         OutlinedTextField(invoice, { invoice = it }, label = { Text("Invoice number (optional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                        OutlinedTextField(qty, { qty = it }, label = { Text("Quantity in base units") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
+                        OutlinedTextField(qty, { qty = it }, label = { Text("Quantity in base units (decimals allowed)") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
                         OutlinedTextField(cost, { cost = it }, label = { Text("Cost per base unit (₹)") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
                         Button(onClick = {
                             val item = ingredients.firstOrNull { it.id == selectedId }
@@ -91,9 +91,9 @@ fun InventoryScreen(db: PaanagamDatabase, mode: String) {
                             else scope.launch {
                                 val purchaseId = UUID.randomUUID().toString()
                                 val lotId = UUID.randomUUID().toString()
-                                val quantity = q.toLong()
+                                val quantity = (q * 1000.0).toLong()
                                 val unitCost = (c * 100.0).toLong()
-                                val total = quantity * unitCost
+                                val total = quantity * unitCost / 1000L
                                 val now = System.currentTimeMillis()
                                 val purchase = Purchase(purchaseId, supplier.trim(), invoice.trim(), now, total)
                                 val line = PurchaseLine(UUID.randomUUID().toString(), purchaseId, item.id, quantity, unitCost, total, lotId)
@@ -122,13 +122,13 @@ fun InventoryScreen(db: PaanagamDatabase, mode: String) {
                             Row(Modifier.fillMaxWidth()) {
                                 RadioButton(selected = selectedId == item.id, onClick = { selectedId = item.id })
                                 val b = balances[item.id] ?: Pair(0L, 0L)
-                                Text(item.name + " • Store " + b.first + " / Kitchen " + b.second + " " + item.baseUnit, color = InvIvory, modifier = Modifier.padding(top = 12.dp))
+                                Text(item.name + " • Store " + (b.first / 1000.0) + " / Kitchen " + (b.second / 1000.0) + " " + item.baseUnit, color = InvIvory, modifier = Modifier.padding(top = 12.dp))
                             }
                         }
-                        OutlinedTextField(transferQty, { transferQty = it }, label = { Text("Transfer quantity in base units") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
+                        OutlinedTextField(transferQty, { transferQty = it }, label = { Text("Transfer quantity in base units (decimals allowed)") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
                         Button(onClick = {
                             val item = ingredients.firstOrNull { it.id == selectedId }
-                            val q = transferQty.toLongOrNull()
+                            val q = transferQty.toDoubleOrNull()?.let { (it * 1000.0).toLong() }
                             if (item == null || q == null || q <= 0) message = "Enter a valid transfer quantity"
                             else scope.launch {
                                 val transfer = StockTransfer(UUID.randomUUID().toString(), from, if (from == "STORE") "KITCHEN" else "STORE", System.currentTimeMillis())
