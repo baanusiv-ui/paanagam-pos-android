@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RoomDatabase
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -14,11 +15,17 @@ interface PaanagamDao {
     fun catalog(): Flow<List<CatalogItem>>
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveCatalog(items: List<CatalogItem>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveCatalogItem(item: CatalogItem)
     @Insert
     suspend fun recordSale(sale: Sale)
-    @Insert suspend fun recordSaleLines(lines: List<SaleLine>)\n    @Transaction suspend fun completeSale(sale: Sale, lines: List<SaleLine>) { recordSale(sale); recordSaleLines(lines) }\n    @Query("SELECT * FROM sales ORDER BY createdAt DESC")
+    @Insert suspend fun recordSaleLines(lines: List<SaleLine>)
+    @Transaction suspend fun completeSale(sale: Sale, lines: List<SaleLine>) { recordSale(sale); recordSaleLines(lines) }
+    @Query("SELECT * FROM sales ORDER BY createdAt DESC")
     fun sales(): Flow<List<Sale>>
-    @Query("SELECT * FROM sale_lines WHERE saleId = :saleId")\n    suspend fun saleLines(saleId: String): List<SaleLine>\n    @Query("SELECT * FROM sop_documents ORDER BY category, title")
+    @Query("SELECT * FROM sale_lines WHERE saleId = :saleId")
+    suspend fun saleLines(saleId: String): List<SaleLine>
+    @Query("SELECT * FROM sop_documents ORDER BY category, title")
     fun sops(): Flow<List<SopDocument>>
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveSop(sop: SopDocument)
