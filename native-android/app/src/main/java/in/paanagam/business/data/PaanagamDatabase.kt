@@ -75,7 +75,7 @@ interface PaanagamDao {
             if (left > 0) {
                 val take = minOf(left, lot.remainingBaseUnits)
                 updateLotBalance(lot.id, lot.remainingBaseUnits - take)
-                totalCost += take * lot.unitCostPaise
+                totalCost += take * lot.unitCostPaise / 1000L
                 insertStockMovement(StockMovement(UUID.randomUUID().toString(), ingredientId, lot.id, movementType, location, "", take, lot.unitCostPaise, referenceId, at))
                 left -= take
             }
