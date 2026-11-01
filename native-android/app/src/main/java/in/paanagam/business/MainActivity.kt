@@ -34,10 +34,22 @@ private val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+
+private val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS ingredients (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, baseUnit TEXT NOT NULL, isCoffeePowder INTEGER NOT NULL, active INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS purchases (id TEXT NOT NULL PRIMARY KEY, supplierName TEXT NOT NULL, invoiceNumber TEXT NOT NULL, purchasedAt INTEGER NOT NULL, totalPaise INTEGER NOT NULL, status TEXT NOT NULL)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS purchase_lines (id TEXT NOT NULL PRIMARY KEY, purchaseId TEXT NOT NULL, ingredientId TEXT NOT NULL, quantityBaseUnits INTEGER NOT NULL, unitCostPaise INTEGER NOT NULL, lineTotalPaise INTEGER NOT NULL, lotId TEXT NOT NULL)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS stock_transfers (id TEXT NOT NULL PRIMARY KEY, fromLocation TEXT NOT NULL, toLocation TEXT NOT NULL, transferredAt INTEGER NOT NULL, status TEXT NOT NULL)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS stock_movements (id TEXT NOT NULL PRIMARY KEY, ingredientId TEXT NOT NULL, lotId TEXT NOT NULL, movementType TEXT NOT NULL, fromLocation TEXT NOT NULL, toLocation TEXT NOT NULL, quantityBaseUnits INTEGER NOT NULL, unitCostPaise INTEGER NOT NULL, referenceId TEXT NOT NULL, createdAt INTEGER NOT NULL)")
+        db.execSQL("ALTER TABLE stock_lots ADD COLUMN sourceLotId TEXT")
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2).build()
+        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
         setContent { PaanagamApp(db) }
     }
 }
