@@ -66,7 +66,7 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                     Text(selected, color = Ivory, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                 }
                 when (selected) {
-                    "Dashboard" -> DashboardScreen()
+                    "Dashboard" -> DashboardScreen()\n                    "POS", "Menu" -> PosScreen(db)
                     "Recipes & BOM / SOP", "SOP Library" -> SopScreen(sops)
                     else -> ModuleScreen(selected)
                 }
