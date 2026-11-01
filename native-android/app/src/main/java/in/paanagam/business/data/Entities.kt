@@ -17,3 +17,6 @@ data class SopDocument(@PrimaryKey val id: String, val title: String, val catego
 
 @Entity(tableName = "sop_checks")
 data class SopCheck(@PrimaryKey val id: String, val sopId: String, val completedBy: String, val completedAt: Long, val notes: String = "")
+
+@Entity(tableName = "sale_lines")
+data class SaleLine(@PrimaryKey val id: String, val saleId: String, val itemId: String, val itemName: String, val quantity: Int, val unitPricePaise: Long, val lineTotalPaise: Long)
