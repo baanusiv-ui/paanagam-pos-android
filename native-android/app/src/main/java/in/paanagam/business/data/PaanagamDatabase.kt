@@ -32,16 +32,23 @@ interface PaanagamDao {
     @Transaction
     suspend fun completeSale(sale: Sale, lines: List<SaleLine>) {
         require(lines.isNotEmpty()) { "Bill has no items" }
+        var totalIngredientCost = 0L
         lines.forEach { line ->
             require(line.quantity > 0)
             recipeLines(line.itemId).forEach { recipe ->
                 val required = Math.multiplyExact(recipe.quantityBaseUnits, line.quantity.toLong())
-                consumeFifo(recipe.ingredientId, "KITCHEN", required, sale.id, "SALE_CONSUMPTION", sale.createdAt)
+                totalIngredientCost = Math.addExact(totalIngredientCost,
+                    consumeFifo(recipe.ingredientId, "KITCHEN", required, sale.id, "SALE_CONSUMPTION", sale.createdAt))
             }
         }
         recordSale(sale)
+        saveSaleCost(SaleCost(sale.id, totalIngredientCost))
         recordSaleLines(lines)
     }
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveSaleCost(cost: SaleCost)
+    @Query("SELECT * FROM sale_costs WHERE saleId = :saleId")
+    suspend fun saleCost(saleId: String): SaleCost?
     @Query("SELECT * FROM sales ORDER BY createdAt DESC")
     fun sales(): Flow<List<Sale>>
     @Query("SELECT * FROM sale_lines WHERE saleId = :saleId")
@@ -166,7 +173,7 @@ interface PaanagamDao {
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class], version = 5, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class], version = 6, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
