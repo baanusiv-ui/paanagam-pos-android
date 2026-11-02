@@ -33,9 +33,18 @@ fun InventoryScreen(db: PaanagamDatabase, mode: String) {
     var cost by remember { mutableStateOf("") }
     var selectedId by remember { mutableStateOf("") }
     var transferQty by remember { mutableStateOf("") }
+    var storeMinimum by remember { mutableStateOf("0") }
+    var kitchenMinimum by remember { mutableStateOf("0") }
     var from by remember { mutableStateOf("STORE") }
     var message by remember { mutableStateOf("") }
     var balances by remember { mutableStateOf<Map<String, Pair<Long, Long>>>(emptyMap()) }
+
+    LaunchedEffect(selectedId, ingredients) {
+        ingredients.firstOrNull { it.id == selectedId }?.let { selected ->
+            storeMinimum = (selected.storeMinStockBaseUnits / 1000.0).toString()
+            kitchenMinimum = (selected.kitchenMinStockBaseUnits / 1000.0).toString()
+        }
+    }
 
     LaunchedEffect(ingredients) {
         val values = mutableMapOf<String, Pair<Long, Long>>()
@@ -62,6 +71,28 @@ fun InventoryScreen(db: PaanagamDatabase, mode: String) {
                             name = ""; coffee = false; message = "Ingredient saved"
                         }
                     }) { Text("Add ingredient") }
+                }
+            }
+        }
+        if (mode == "Inventory" && ingredients.isNotEmpty()) {
+            Card(colors = CardDefaults.cardColors(containerColor = InvPanel)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Low-stock alert settings", color = InvGold)
+                    Text("Selected ingredient: ${ingredients.firstOrNull { it.id == selectedId }?.name ?: "Choose an ingredient"}", color = InvIvory)
+                    OutlinedTextField(storeMinimum, { storeMinimum = it }, label = { Text("Store minimum (${ingredients.firstOrNull { it.id == selectedId }?.baseUnit ?: "unit"})") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
+                    OutlinedTextField(kitchenMinimum, { kitchenMinimum = it }, label = { Text("Kitchen minimum (${ingredients.firstOrNull { it.id == selectedId }?.baseUnit ?: "unit"})") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
+                    Button(onClick = {
+                        val item = ingredients.firstOrNull { it.id == selectedId }
+                        val store = storeMinimum.toDoubleOrNull()
+                        val kitchen = kitchenMinimum.toDoubleOrNull()
+                        if (item == null || store == null || kitchen == null || store < 0 || kitchen < 0) message = "Enter valid minimum levels (zero disables an alert)"
+                        else scope.launch {
+                            runCatching {
+                                db.dao().updateIngredient(item.copy(storeMinStockBaseUnits = (store * 1000.0).toLong(), kitchenMinStockBaseUnits = (kitchen * 1000.0).toLong()))
+                            }.onSuccess { message = "Minimum stock levels saved" }
+                                .onFailure { message = it.message ?: "Could not save minimum levels" }
+                        }
+                    }) { Text("Save alert levels") }
                 }
             }
         }
