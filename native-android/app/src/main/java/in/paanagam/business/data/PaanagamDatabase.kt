@@ -76,6 +76,8 @@ interface PaanagamDao {
     suspend fun insertProductionInput(item: ProductionInput)
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertWastage(item: WastageRecord)
+    @Query("SELECT * FROM wastage_records ORDER BY recordedAt DESC")
+    fun wastageRecords(): Flow<List<WastageRecord>>
 
     @Query("SELECT * FROM ingredients WHERE active = 1 ORDER BY name")
     fun ingredients(): Flow<List<Ingredient>>
