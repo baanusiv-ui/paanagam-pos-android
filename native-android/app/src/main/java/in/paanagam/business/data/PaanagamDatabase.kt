@@ -35,7 +35,9 @@ interface PaanagamDao {
         var totalIngredientCost = 0L
         lines.forEach { line ->
             require(line.quantity > 0)
-            recipeLines(line.itemId).forEach { recipe ->
+            val configuredRecipe = recipeLines(line.itemId)
+            require(configuredRecipe.isNotEmpty()) { "Recipe missing for ${line.itemName}. Configure its ingredients before selling." }
+            configuredRecipe.forEach { recipe ->
                 val required = Math.multiplyExact(recipe.quantityBaseUnits, line.quantity.toLong())
                 totalIngredientCost = Math.addExact(totalIngredientCost,
                     consumeFifo(recipe.ingredientId, "KITCHEN", required, sale.id, "SALE_CONSUMPTION", sale.createdAt))
