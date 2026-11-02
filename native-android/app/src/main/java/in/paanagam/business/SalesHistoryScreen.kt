@@ -26,6 +26,7 @@ fun SalesHistoryScreen(db: PaanagamDatabase) {
     val scope = rememberCoroutineScope()
     var expandedSaleId by remember { mutableStateOf<String?>(null) }
     var selectedLines by remember { mutableStateOf<List<SaleLine>>(emptyList()) }
+    var selectedCostPaise by remember { mutableStateOf<Long?>(null) }
     val todayStart = remember {
         val calendar = java.util.Calendar.getInstance()
         calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
@@ -62,13 +63,20 @@ fun SalesHistoryScreen(db: PaanagamDatabase) {
                                 if (expandedSaleId == sale.id) {
                                     expandedSaleId = null
                                     selectedLines = emptyList()
+                                    selectedCostPaise = null
                                 } else {
                                     expandedSaleId = sale.id
                                     selectedLines = emptyList()
-                                    scope.launch { selectedLines = db.dao().saleLines(sale.id) }
+                                    selectedCostPaise = null
+                                    scope.launch { selectedLines = db.dao().saleLines(sale.id); selectedCostPaise = db.dao().saleCost(sale.id)?.ingredientCostPaise ?: 0L }
                                 }
                             }) { Text(if (expandedSaleId == sale.id) "Hide items" else "View items", color = HistoryGold) }
                             if (expandedSaleId == sale.id) {
+                                if (selectedCostPaise != null) {
+                                    val cost = selectedCostPaise ?: 0L
+                                    Text("Ingredient cost: ₹%.2f".format(cost / 100.0), color = HistoryIvory)
+                                    Text("Gross margin before other expenses: ₹%.2f".format((sale.totalPaise - cost) / 100.0), color = HistoryGold, fontWeight = FontWeight.Bold)
+                                }
                                 if (selectedLines.isEmpty()) {
                                     Text("No bill lines found.", color = HistoryIvory)
                                 } else {
