@@ -21,7 +21,27 @@ interface PaanagamDao {
     @Insert
     suspend fun recordSale(sale: Sale)
     @Insert suspend fun recordSaleLines(lines: List<SaleLine>)
-    @Transaction suspend fun completeSale(sale: Sale, lines: List<SaleLine>) { recordSale(sale); recordSaleLines(lines) }
+    @Query("SELECT * FROM recipe_lines WHERE menuItemId = :menuItemId")
+    suspend fun recipeLines(menuItemId: String): List<RecipeLine>
+    @Query("SELECT * FROM recipe_lines ORDER BY menuItemId")
+    fun allRecipeLines(): Flow<List<RecipeLine>>
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveRecipeLine(line: RecipeLine)
+    @Query("DELETE FROM recipe_lines WHERE id = :id")
+    suspend fun deleteRecipeLine(id: String)
+    @Transaction
+    suspend fun completeSale(sale: Sale, lines: List<SaleLine>) {
+        require(lines.isNotEmpty()) { "Bill has no items" }
+        lines.forEach { line ->
+            require(line.quantity > 0)
+            recipeLines(line.itemId).forEach { recipe ->
+                val required = Math.multiplyExact(recipe.quantityBaseUnits, line.quantity.toLong())
+                consumeFifo(recipe.ingredientId, "KITCHEN", required, sale.id, "SALE_CONSUMPTION", sale.createdAt)
+            }
+        }
+        recordSale(sale)
+        recordSaleLines(lines)
+    }
     @Query("SELECT * FROM sales ORDER BY createdAt DESC")
     fun sales(): Flow<List<Sale>>
     @Query("SELECT * FROM sale_lines WHERE saleId = :saleId")
@@ -146,7 +166,7 @@ interface PaanagamDao {
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class], version = 4, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class], version = 5, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
