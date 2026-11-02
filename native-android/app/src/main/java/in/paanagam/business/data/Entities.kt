@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 data class CatalogItem(@PrimaryKey val id: String, val name: String, val category: String, val pricePaise: Long, val active: Boolean = true)
 
 @Entity(tableName = "ingredients")
-data class Ingredient(@PrimaryKey val id: String, val name: String, val baseUnit: String, val isCoffeePowder: Boolean = false, val active: Boolean = true)
+data class Ingredient(@PrimaryKey val id: String, val name: String, val baseUnit: String, val isCoffeePowder: Boolean = false, val active: Boolean = true, val storeMinStockBaseUnits: Long = 0L, val kitchenMinStockBaseUnits: Long = 0L)
 
 @Entity(tableName = "purchases")
 data class Purchase(@PrimaryKey val id: String, val supplierName: String, val invoiceNumber: String, val purchasedAt: Long, val totalPaise: Long, val status: String = "RECEIVED")
