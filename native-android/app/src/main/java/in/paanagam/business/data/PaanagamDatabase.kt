@@ -29,6 +29,14 @@ interface PaanagamDao {
     suspend fun saveRecipeLine(line: RecipeLine)
     @Query("DELETE FROM recipe_lines WHERE id = :id")
     suspend fun deleteRecipeLine(id: String)
+    @Query("DELETE FROM recipe_lines WHERE menuItemId = :menuItemId")
+    suspend fun deleteRecipeLinesForMenuItem(menuItemId: String)
+    @Transaction
+    suspend fun replaceRecipe(menuItemId: String, lines: List<RecipeLine>) {
+        require(lines.isNotEmpty() && lines.all { it.menuItemId == menuItemId && it.quantityBaseUnits > 0 })
+        deleteRecipeLinesForMenuItem(menuItemId)
+        lines.forEach { saveRecipeLine(it) }
+    }
     @Transaction
     suspend fun completeSale(sale: Sale, lines: List<SaleLine>) {
         require(lines.isNotEmpty()) { "Bill has no items" }
