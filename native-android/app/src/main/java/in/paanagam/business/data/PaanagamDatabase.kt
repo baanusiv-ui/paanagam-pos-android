@@ -81,6 +81,10 @@ interface PaanagamDao {
     fun ingredients(): Flow<List<Ingredient>>
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertIngredient(item: Ingredient)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun updateIngredient(item: Ingredient)
+    @Query("SELECT COUNT(*) FROM ingredients i WHERE i.active = 1 AND ((i.storeMinStockBaseUnits > 0 AND COALESCE((SELECT SUM(remainingBaseUnits) FROM stock_lots WHERE ingredientId = i.id AND location = 'STORE'), 0) < i.storeMinStockBaseUnits) OR (i.kitchenMinStockBaseUnits > 0 AND COALESCE((SELECT SUM(remainingBaseUnits) FROM stock_lots WHERE ingredientId = i.id AND location = 'KITCHEN'), 0) < i.kitchenMinStockBaseUnits))")
+    fun lowStockCount(): Flow<Int>
     @Query("SELECT * FROM ingredients WHERE id = :id")
     suspend fun ingredient(id: String): Ingredient?
     @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -183,7 +187,7 @@ interface PaanagamDao {
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class], version = 6, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class], version = 7, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
