@@ -47,3 +47,6 @@ data class SaleLine(@PrimaryKey val id: String, val saleId: String, val itemId: 
 
 @Entity(tableName = "recipe_lines")
 data class RecipeLine(@PrimaryKey val id: String, val menuItemId: String, val ingredientId: String, val quantityBaseUnits: Long)
+
+@Entity(tableName = "sale_costs")
+data class SaleCost(@PrimaryKey val saleId: String, val ingredientCostPaise: Long)
