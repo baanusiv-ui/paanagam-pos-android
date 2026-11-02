@@ -44,3 +44,6 @@ data class SopCheck(@PrimaryKey val id: String, val sopId: String, val completed
 
 @Entity(tableName = "sale_lines")
 data class SaleLine(@PrimaryKey val id: String, val saleId: String, val itemId: String, val itemName: String, val quantity: Int, val unitPricePaise: Long, val lineTotalPaise: Long)
+
+@Entity(tableName = "recipe_lines")
+data class RecipeLine(@PrimaryKey val id: String, val menuItemId: String, val ingredientId: String, val quantityBaseUnits: Long)
