@@ -67,7 +67,7 @@ private val modules = listOf(
     "Dashboard","POS","Orders","Sales History","Menu","Inventory","Recipes & BOM / SOP","BOM","Modifiers","Combos",
     "Purchases","Store → Kitchen","Production","Kitchen Stock","Next-Day Planning","Kitchen KDS","Operations Control",
     "Cash Shift","Wastage","Customers","Food Cost","Finance & P&L","Reports","GST Calculator","Marketing Hub",
-    "Marketing Automation","Automation Hub","Business Planner","Stock Reconciliation","Sales Reconciliation","Suppliers",
+    "Marketing Automation","Automation Hub","WhatsApp Settings","Business Planner","Stock Reconciliation","Sales Reconciliation","Suppliers",
     "Staff & HR","Safety & FSSAI","Equipment","SOP Library"
 )
 
@@ -100,6 +100,7 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                     "Recipes & BOM / SOP", "SOP Library" -> SopScreen(sops)
                     "Inventory", "Purchases", "Store → Kitchen", "Kitchen Stock" -> InventoryScreen(db, selected)
                     "Production", "Wastage" -> ProductionScreen(db)
+                    "WhatsApp Settings" -> WhatsAppSettingsScreen()
                     else -> ModuleScreen(selected)
                 }
             }
