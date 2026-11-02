@@ -16,6 +16,7 @@ import java.util.UUID
 @Composable
 fun ProductionScreen(db: PaanagamDatabase) {
     val ingredients by db.dao().ingredients().collectAsState(initial = emptyList())
+    val wastageRecords by db.dao().wastageRecords().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var powder by remember { mutableStateOf("") }
     var water by remember { mutableStateOf("") }
@@ -91,6 +92,31 @@ fun ProductionScreen(db: PaanagamDatabase) {
                             .onFailure { message = it.message ?: "Wastage could not be recorded" }
                     }
                 }) { Text("Save wastage") }
+            }
+        }
+        Card {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Recent wastage", style = MaterialTheme.typography.titleMedium)
+                    Text("₹%.2f".format(wastageRecords.sumOf { it.costPaise } / 100.0))
+                }
+                if (wastageRecords.isEmpty()) {
+                    Text("No wastage entries recorded yet.")
+                } else {
+                    LazyColumn(Modifier.heightIn(max = 220.dp)) {
+                        items(wastageRecords.take(20), key = { it.id }) { record ->
+                            val itemName = ingredients.firstOrNull { it.id == record.ingredientId }?.name ?: "Deleted ingredient"
+                            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(itemName, style = MaterialTheme.typography.bodyMedium)
+                                    Text("₹%.2f".format(record.costPaise / 100.0), style = MaterialTheme.typography.labelLarge)
+                                }
+                                Text("${record.quantityBaseUnits / 1000.0} ${ingredients.firstOrNull { it.id == record.ingredientId }?.baseUnit ?: ""} • ${record.location} • ${record.reason}", style = MaterialTheme.typography.bodySmall)
+                                Divider()
+                            }
+                        }
+                    }
+                }
             }
         }
         Text(message)
