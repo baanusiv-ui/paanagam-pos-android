@@ -55,10 +55,19 @@ private val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
+
+private val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS recipe_lines (id TEXT NOT NULL PRIMARY KEY, menuItemId TEXT NOT NULL, ingredientId TEXT NOT NULL, quantityBaseUnits INTEGER NOT NULL)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_recipe_lines_menuItemId ON recipe_lines(menuItemId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_recipe_lines_ingredientId ON recipe_lines(ingredientId)")
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
+        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
         setContent { PaanagamApp(db) }
     }
 }
@@ -98,7 +107,8 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                     "Dashboard" -> DashboardScreen(db)
                     "Sales History" -> SalesHistoryScreen(db)
                     "POS", "Menu" -> PosScreen(db)
-                    "Recipes & BOM / SOP", "SOP Library" -> SopScreen(sops)
+                    "Recipes & BOM / SOP" -> RecipeScreen(db)
+                    "SOP Library" -> SopScreen(sops)
                     "Inventory", "Purchases", "Store → Kitchen", "Kitchen Stock" -> InventoryScreen(db, selected)
                     "Production", "Wastage" -> ProductionScreen(db)
                     "WhatsApp Settings" -> WhatsAppSettingsScreen()
