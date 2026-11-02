@@ -1,20 +1,45 @@
 # Paanagam Native Android
 
-This directory is the separate native Android application. It is Kotlin + Jetpack Compose with a Room database; it does not use Apper, React, Capacitor, WebView or Supabase.
+This directory contains the standalone native Android application. It is built with Kotlin, Jetpack Compose and a local Room database. It does not depend on Apper, React, Capacitor, WebView or Supabase.
 
 ## Build
-Run GitHub Actions workflow **Build Native Android APK**. The debug APK is uploaded as artifact `paanagam-native-debug-apk`.
 
-## Current foundation
-- Native Compose navigation for all requested Paanagam modules.
-- Room database entities for catalogue items, stock lots, sales and SOP documents/checks.
-- FIFO lot query orders by received time.
-- SOP reference screen includes the approved filter-coffee batch and serving specification.
-- Sales History reads real locally stored POS bills, shows today's bill count and sales total, and expands each bill to its item lines.
-- Recipe/BOM screen maps menu items to ingredient quantities per serving, stored as scaled decimal base units.
-- POS sale completion now deducts configured recipe quantities from Kitchen stock atomically using FIFO lots; insufficient configured stock rejects the bill without saving it. Ingredient cost is saved per bill from the actual FIFO lots consumed, and Sales History shows ingredient cost and gross margin before other expenses.
-- Dashboard sales and bill count are calculated from the local Room database.
-- Dark espresso / ivory / warm-gold design direction.\n- Configurable WhatsApp settings screen with locally persisted provider/mode preferences and independent message workflow toggles. Automatic sending is locked while disconnected; no credentials or number migration are performed by the app screen.\n\nWhatsApp implementation status: settings UI only. Coexistence onboarding, Meta API credentials, server-side message dispatch, templates, webhooks and delivery tracking are not connected yet.
+Run GitHub Actions workflow **Build Native Android APK**. The debug APK is uploaded as the artifact `paanagam-native-debug-apk`.
 
-## Not production complete yet
-Stock-alert thresholds, role authentication, printer/UPI QR, backup/restore, detailed reporting, and full SOP authoring/approval/checklist workflows remain staged implementation work. Recipe deduction is implemented but needs device-level acceptance testing with real configured ingredients and kitchen stock before live use. Purchase receipt, FIFO stock transfers, coffee-decoction production and wastage capture have initial local workflows but require broader validation before live use. Do not use this starter for live business transactions until these workflows and tests are completed.
+## Implemented foundation
+
+- Native Compose navigation for the Paanagam business modules.
+- Local Room entities for catalogue items, ingredients, purchase receipts and lines, stock lots, transfers, movements, production batches, wastage, sales, recipes and SOP records.
+- FIFO stock-lot consumption and transfer logic; each purchase lot retains its own cost. Purchase costs are not averaged.
+- Separate Store and Kitchen stock balances.
+- Configurable Store and Kitchen minimum stock levels per ingredient. Dashboard low-stock count is calculated from live Room stock balances; zero disables that location's alert.
+- Purchase receipt into Store and FIFO transfer between Store and Kitchen.
+- Recipe/BOM lines use scaled decimal base units.
+- POS sale completion deducts configured recipe quantities from Kitchen stock atomically using FIFO lots. A sale with a missing recipe or insufficient configured stock is rejected without saving the bill.
+- Ingredient cost is saved per bill from the actual FIFO lots consumed. Sales History shows bill lines, ingredient cost and gross margin before other expenses.
+- Dashboard sales, bill count and stock-alert count are calculated from local database records.
+- Production and wastage workflows have initial local implementations, including recent wastage history and FIFO cost display; these still need broader validation.
+- Filter-coffee SOP reference: 250 g coffee powder + 1,100 ml water produces 1,000 ml usable decoction, with 100 ml retained in grounds. One serving uses 25 ml decoction + 75 ml milk + 5 g sugar.
+- Configurable WhatsApp settings UI stores local preferences only. Automatic sending remains disabled while disconnected; no credentials, number migration, API dispatch, templates, webhooks or delivery tracking are connected.
+- Espresso, ivory and warm-gold visual direction.
+
+## Remaining work before production use
+
+- Staff roles, authentication and permission enforcement.
+- Printer integration and UPI QR/payment confirmation workflow.
+- Backup and restore, including tested recovery on a replacement device.
+- Detailed sales, stock, food-cost and profit reports.
+- Complete SOP authoring, approval, version history and staff checklist workflows.
+- Full validation of coffee-decoction production, FIFO stock transfers, wastage, purchase corrections and reconciliation.
+- Device-level acceptance tests using real menu items, recipes, ingredient quantities and opening stock.
+
+The current APK is a development build. Do not use it for live business transactions until the remaining workflows and device-level acceptance tests are completed.
+
+## Business rules to preserve
+
+- Payments are Cash and UPI only; Paytm is excluded.
+- Stock is maintained separately in Store and Kitchen.
+- FIFO costing is mandatory. Old stock retains its original purchase cost; new stock uses its own lot cost. Never use average purchase costing.
+- Coffee powder stock issue must follow 250 g multiples.
+- POS checkout must work independently of WhatsApp.
+- WhatsApp integration remains paused unless explicitly resumed by the user.
