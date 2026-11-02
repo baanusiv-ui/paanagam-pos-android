@@ -19,10 +19,12 @@ import java.util.UUID
 @Composable fun PosScreen(db: PaanagamDatabase) {
  val catalog by db.dao().catalog().collectAsState(initial=emptyList())
  val sales by db.dao().sales().collectAsState(initial=emptyList())
+ val recipeLines by db.dao().allRecipeLines().collectAsState(initial=emptyList())
  val scope=rememberCoroutineScope()
  var name by remember { mutableStateOf("") }; var category by remember { mutableStateOf("Beverages") }; var price by remember { mutableStateOf("") }
  var cart by remember { mutableStateOf<Map<String,Pair<CatalogItem,Int>>>(emptyMap()) }; var payment by remember { mutableStateOf("CASH") }; var msg by remember { mutableStateOf("") }
  val total=cart.values.sumOf { it.first.pricePaise*it.second }
+ val missingRecipes = cart.values.map { it.first }.filter { item -> recipeLines.none { it.menuItemId == item.id } }
  Column(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(7.dp)) {
   Text("Menu setup",color=Color(0xFFDDB36C))
   Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -47,10 +49,21 @@ import java.util.UUID
   } }
   if(cart.isNotEmpty()) {
    Text("Total ₹%.2f".format(total/100.0),color=Color(0xFFDDB36C),style=MaterialTheme.typography.titleLarge)
+   if (missingRecipes.isNotEmpty()) {
+    Text("Recipe required before sale: " + missingRecipes.joinToString { it.name }, color=Color(0xFFFFB36B))
+   }
    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
     FilterChip(selected=payment=="CASH",onClick={payment="CASH"},label={Text("Cash")})
     FilterChip(selected=payment=="UPI",onClick={payment="UPI"},label={Text("UPI")})
-    Button(onClick={val id=UUID.randomUUID().toString();val lines=cart.values.map{(i,q)->SaleLine(UUID.randomUUID().toString(),id,i.id,i.name,q,i.pricePaise,i.pricePaise*q)};scope.launch{db.dao().completeSale(Sale(id,System.currentTimeMillis(),total,payment),lines);cart=emptyMap();msg="Sale saved offline"}}){Text("Complete sale")}
+    Button(enabled=missingRecipes.isEmpty(),onClick={
+     val id=UUID.randomUUID().toString()
+     val lines=cart.values.map{(i,q)->SaleLine(UUID.randomUUID().toString(),id,i.id,i.name,q,i.pricePaise,i.pricePaise*q)}
+     scope.launch {
+      runCatching { db.dao().completeSale(Sale(id,System.currentTimeMillis(),total,payment),lines) }
+       .onSuccess { cart=emptyMap();msg="Sale saved offline" }
+       .onFailure { msg=it.message ?: "Sale could not be saved" }
+     }
+    }){Text("Complete sale")}
    }
   }
   Text(msg,color=Color(0xFFDDB36C));Text("Saved bills: ${sales.size}",color=Color(0xFFFFF4DF))
