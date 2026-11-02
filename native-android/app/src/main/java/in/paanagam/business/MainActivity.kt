@@ -70,10 +70,16 @@ private val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
+private val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE ingredients ADD COLUMN storeMinStockBaseUnits INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE ingredients ADD COLUMN kitchenMinStockBaseUnits INTEGER NOT NULL DEFAULT 0")
+    }
+}
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build()
+        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build()
         setContent { PaanagamApp(db) }
     }
 }
@@ -127,6 +133,7 @@ private fun PaanagamApp(db: PaanagamDatabase) {
 
 @Composable private fun DashboardScreen(db: PaanagamDatabase) {
     val sales by db.dao().sales().collectAsState(initial = emptyList())
+    val lowStockCount by db.dao().lowStockCount().collectAsState(initial = 0)
     val todayStart = remember {
         val calendar = java.util.Calendar.getInstance()
         calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
@@ -140,8 +147,9 @@ private fun PaanagamApp(db: PaanagamDatabase) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Paanagam Business", color = Gold, style = MaterialTheme.typography.titleLarge)
         Text("Offline-first native Android system", color = Ivory)
-        val cards = listOf("Sales today" to "₹%.2f".format(todayTotal / 100.0), "Bills today" to todaySales.size.toString(), "Open orders" to "0", "Stock alerts" to "Not configured")
+        val cards = listOf("Sales today" to "₹%.2f".format(todayTotal / 100.0), "Bills today" to todaySales.size.toString(), "Open orders" to "0", "Stock alerts" to lowStockCount.toString())
         cards.chunked(2).forEach { pair -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { pair.forEach { (label,value) -> Card(Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = Color(0xFF3A2519))) { Column(Modifier.padding(14.dp)) { Text(label, color = Ivory); Text(value, color = Gold, style = MaterialTheme.typography.headlineMedium) } } } } }
+        if (lowStockCount > 0) Text("$lowStockCount ingredient/location stock level(s) are below their configured minimum.", color = Color(0xFFFFB36B)) else Text("No low-stock alerts. Configure minimum levels in Inventory.", color = Ivory)
         Text("Sales figures update automatically from locally saved POS bills.", color = Ivory)
         Text("Select Sales History to review bills and item details.", color = Gold)
     }
