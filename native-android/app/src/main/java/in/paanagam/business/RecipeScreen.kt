@@ -38,6 +38,30 @@ fun RecipeScreen(db: PaanagamDatabase) {
         if (catalog.isEmpty() || ingredients.isEmpty()) {
             Text("Add menu items in POS and ingredients in Inventory before configuring recipes.", color = gold)
         } else {
+            val standardCoffeeItem = catalog.firstOrNull { it.name.contains("filter coffee", ignoreCase = true) }
+            val decoction = ingredients.firstOrNull { it.name.contains("decoction", ignoreCase = true) && it.baseUnit.equals("ml", true) }
+            val milk = ingredients.firstOrNull { it.name.contains("milk", ignoreCase = true) && it.baseUnit.equals("ml", true) }
+            val sugar = ingredients.firstOrNull { it.name.contains("sugar", ignoreCase = true) && it.baseUnit.equals("g", true) }
+            OutlinedButton(
+                enabled = standardCoffeeItem != null && decoction != null && milk != null && sugar != null,
+                onClick = {
+                    val menu = standardCoffeeItem!!
+                    val recipe = listOf(
+                        RecipeLine(UUID.randomUUID().toString(), menu.id, decoction!!.id, 25000L),
+                        RecipeLine(UUID.randomUUID().toString(), menu.id, milk!!.id, 75000L),
+                        RecipeLine(UUID.randomUUID().toString(), menu.id, sugar!!.id, 5000L)
+                    )
+                    scope.launch {
+                        runCatching { db.dao().replaceRecipe(menu.id, recipe) }
+                            .onSuccess { menuId = menu.id; message = "Standard filter coffee recipe applied: 25 ml decoction + 75 ml milk + 5 g sugar" }
+                            .onFailure { message = it.message ?: "Could not apply standard recipe" }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Apply standard filter coffee recipe") }
+            if (standardCoffeeItem == null || decoction == null || milk == null || sugar == null) {
+                Text("For the quick setup, add a menu item named Filter Coffee and ingredients Decoction (ml), Milk (ml), Sugar (g).", color = gold)
+            }
             Text("Menu item", color = gold)
             catalog.forEach { item ->
                 FilterChip(selected = menuId == item.id, onClick = { menuId = item.id }, label = { Text(item.name) })
