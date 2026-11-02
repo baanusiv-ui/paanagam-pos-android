@@ -95,7 +95,8 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                     Text(selected, color = Ivory, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                 }
                 when (selected) {
-                    "Dashboard" -> DashboardScreen()
+                    "Dashboard" -> DashboardScreen(db)
+                    "Sales History" -> SalesHistoryScreen(db)
                     "POS", "Menu" -> PosScreen(db)
                     "Recipes & BOM / SOP", "SOP Library" -> SopScreen(sops)
                     "Inventory", "Purchases", "Store → Kitchen", "Kitchen Stock" -> InventoryScreen(db, selected)
@@ -108,13 +109,25 @@ private fun PaanagamApp(db: PaanagamDatabase) {
     }
 }
 
-@Composable private fun DashboardScreen() {
+@Composable private fun DashboardScreen(db: PaanagamDatabase) {
+    val sales by db.dao().sales().collectAsState(initial = emptyList())
+    val todayStart = remember {
+        val calendar = java.util.Calendar.getInstance()
+        calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        calendar.set(java.util.Calendar.MINUTE, 0)
+        calendar.set(java.util.Calendar.SECOND, 0)
+        calendar.set(java.util.Calendar.MILLISECOND, 0)
+        calendar.timeInMillis
+    }
+    val todaySales = sales.filter { it.createdAt >= todayStart }
+    val todayTotal = todaySales.sumOf { it.totalPaise }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Paanagam Business", color = Gold, style = MaterialTheme.typography.titleLarge)
         Text("Offline-first native Android system", color = Ivory)
-        val cards = listOf("Sales today" to "₹0.00","Open orders" to "0","Store stock alerts" to "0","Kitchen stock alerts" to "0")
+        val cards = listOf("Sales today" to "₹%.2f".format(todayTotal / 100.0), "Bills today" to todaySales.size.toString(), "Open orders" to "0", "Stock alerts" to "Not configured")
         cards.chunked(2).forEach { pair -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { pair.forEach { (label,value) -> Card(Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = Color(0xFF3A2519))) { Column(Modifier.padding(14.dp)) { Text(label, color = Ivory); Text(value, color = Gold, style = MaterialTheme.typography.headlineMedium) } } } } }
-        Text("Select a module from the navigation panel to begin.", color = Ivory)
+        Text("Sales figures update automatically from locally saved POS bills.", color = Ivory)
+        Text("Select Sales History to review bills and item details.", color = Gold)
     }
 }
 
