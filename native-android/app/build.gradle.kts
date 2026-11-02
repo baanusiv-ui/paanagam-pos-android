@@ -14,7 +14,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
     }
-    buildFeatures { compose = true }
+    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }\n    kotlinOptions {\n        jvmTarget = "17"\n    }\n    buildFeatures { compose = true }
 }
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
