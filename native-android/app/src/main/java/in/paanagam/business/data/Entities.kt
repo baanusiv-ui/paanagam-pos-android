@@ -1,4 +1,4 @@
-package in.paanagam.business.data
+package `in`.paanagam.business.data
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
