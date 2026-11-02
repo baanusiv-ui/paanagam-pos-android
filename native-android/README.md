@@ -12,7 +12,7 @@ Run GitHub Actions workflow **Build Native Android APK**. The debug APK is uploa
 - SOP reference screen includes the approved filter-coffee batch and serving specification.
 - Sales History reads real locally stored POS bills, shows today's bill count and sales total, and expands each bill to its item lines.
 - Recipe/BOM screen maps menu items to ingredient quantities per serving, stored as scaled decimal base units.
-- POS sale completion now deducts configured recipe quantities from Kitchen stock atomically using FIFO lots; insufficient configured stock rejects the bill without saving it.
+- POS sale completion now deducts configured recipe quantities from Kitchen stock atomically using FIFO lots; insufficient configured stock rejects the bill without saving it. Ingredient cost is saved per bill from the actual FIFO lots consumed, and Sales History shows ingredient cost and gross margin before other expenses.
 - Dashboard sales and bill count are calculated from the local Room database.
 - Dark espresso / ivory / warm-gold design direction.\n- Configurable WhatsApp settings screen with locally persisted provider/mode preferences and independent message workflow toggles. Automatic sending is locked while disconnected; no credentials or number migration are performed by the app screen.\n\nWhatsApp implementation status: settings UI only. Coexistence onboarding, Meta API credentials, server-side message dispatch, templates, webhooks and delivery tracking are not connected yet.
 
