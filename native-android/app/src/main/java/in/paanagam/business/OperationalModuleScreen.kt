@@ -89,9 +89,12 @@ fun OperationalModuleScreen(db: PaanagamDatabase, module: String) {
                 Button(onClick = {
                     if (title.isBlank()) message = "Enter a title or reference."
                     else if (amount.isNotBlank() && (amountPaise == null || amountPaise < 0)) message = "Enter a valid amount with up to 2 decimal places."
+                    else if (module == "Operating Expenses" && (amountPaise == null || amountPaise <= 0L)) message = "Enter a positive expense amount."
+                    else if (isGst && (gstRate.toBigDecimalOrNull() == null || gstRateValue < BigDecimal.ZERO || gstRateValue > BigDecimal("100"))) message = "Enter a GST rate between 0 and 100 percent."
                     else scope.launch {
                         val record = OperationalRecord(
-                            UUID.randomUUID().toString(), module, title.trim(), details.trim(),
+                            UUID.randomUUID().toString(), module, title.trim(),
+                            if (isGst) details.trim() + "\nGST rate: $gstRate% • GST: ₹$gstValue • total: ₹${amountValue.add(gstValue).setScale(2, RoundingMode.HALF_UP)}" else details.trim(),
                             amountPaise ?: 0L, status, System.currentTimeMillis()
                         )
                         runCatching { db.dao().insertOperationalRecord(record) }
