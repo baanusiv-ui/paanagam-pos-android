@@ -125,3 +125,10 @@ data class ComboComponent(@PrimaryKey val id: String, val comboItemId: String, v
 
 @Entity(tableName = "kitchen_tickets", indices = [Index(value = ["status"]), Index(value = ["createdAt"])])
 data class KitchenTicket(@PrimaryKey val saleId: String, val status: String = "NEW", val createdAt: Long, val updatedAt: Long)
+
+
+@Entity(tableName = "held_orders")
+data class HeldOrder(@PrimaryKey val id: String, val createdAt: Long, val customerPhone: String, val totalPaise: Long)
+
+@Entity(tableName = "held_order_lines", indices = [Index(value = ["orderId"])])
+data class HeldOrderLine(@PrimaryKey val id: String, val orderId: String, val itemId: String, val itemName: String, val quantity: Int, val unitPricePaise: Long)
