@@ -191,7 +191,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21).build()
-        setContent { PaanagamApp(db) }
+        setContent { PaanagamApp(db) { recreate() } }
     }
 }
 
@@ -200,12 +200,12 @@ private val modules = listOf(
     "Purchases","Store → Kitchen","Production","Kitchen Stock","Next-Day Planning","Kitchen KDS","Operations Control",
     "Cash Shift","Wastage","Customers","Food Cost","Finance & P&L","Reports","GST Calculator","Marketing Hub",
     "Marketing Automation","Automation Hub","WhatsApp Settings","Business Planner","Stock Reconciliation","Sales Reconciliation","Suppliers",
-    "Staff & HR","Safety & FSSAI","Equipment","SOP Library"
+    "Staff & HR","Safety & FSSAI","Equipment","SOP Library","Data Backup"
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PaanagamApp(db: PaanagamDatabase) {
+private fun PaanagamApp(db: PaanagamDatabase, onRecreate: () -> Unit) {
     var selected by remember { mutableStateOf("Dashboard") }
     var activeStaff by remember { mutableStateOf<StaffMember?>(null) }
     var firstStaffExists by remember { mutableStateOf<Boolean?>(null) }
@@ -314,6 +314,7 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                         "Next-Day Planning" -> NextDayPlanningScreen(db)
                         "Combos" -> ComboPlanningScreen(db)
                         "Kitchen KDS" -> KitchenKdsScreen(db)
+                        "Data Backup" -> DatabaseBackupScreen(db, onRecreate)
                         else -> OperationalModuleScreen(db, selected)
                     }
                     }
@@ -325,7 +326,7 @@ private fun PaanagamApp(db: PaanagamDatabase) {
 
 private fun canAccess(role: String, module: String): Boolean = when (role) {
     "ADMIN" -> true
-    "MANAGER" -> module !in listOf("Staff & HR", "WhatsApp Settings", "Business Planner", "Marketing Automation", "Automation Hub")
+    "MANAGER" -> module !in listOf("Staff & HR", "WhatsApp Settings", "Business Planner", "Marketing Automation", "Automation Hub", "Data Backup")
     "CASHIER" -> module in listOf("Dashboard", "POS", "Orders", "Sales History", "Cash Shift")
     else -> false
 }
