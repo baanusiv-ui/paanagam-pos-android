@@ -64,3 +64,18 @@ data class OperationalRecord(
     val status: String,
     val createdAt: Long
 )
+
+
+@Entity(tableName = "stock_reconciliations")
+data class StockReconciliation(
+    @PrimaryKey val id: String,
+    val ingredientId: String,
+    val ingredientName: String,
+    val location: String,
+    val systemQtyBaseUnits: Long,
+    val physicalQtyBaseUnits: Long,
+    val varianceBaseUnits: Long,
+    val adjustmentCostPaise: Long,
+    val note: String,
+    val reconciledAt: Long
+)
