@@ -199,6 +199,8 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
 
     @Query("SELECT * FROM catalog_items WHERE active = 1 ORDER BY category, name")
     fun catalog(): Flow<List<CatalogItem>>
+    @Query("SELECT * FROM catalog_items ORDER BY active DESC, category, name")
+    fun allCatalog(): Flow<List<CatalogItem>>
     @Query("SELECT * FROM catalog_items WHERE id = :id")
     suspend fun catalogItem(id: String): CatalogItem?
     @Insert(onConflict = OnConflictStrategy.REPLACE)
