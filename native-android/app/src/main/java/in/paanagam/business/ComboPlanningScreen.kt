@@ -10,6 +10,8 @@ import androidx.compose.ui.unit.dp
 import `in`.paanagam.business.data.*
 import kotlinx.coroutines.launch
 import java.util.UUID
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 @Composable
 fun ComboPlanningScreen(db: PaanagamDatabase) {
@@ -72,14 +74,14 @@ fun ComboPlanningScreen(db: PaanagamDatabase) {
             OutlinedButton(onClick = { draft = emptyList() }) { Text("Clear components") }
         }
         Button(onClick = {
-            val price = comboPrice.toLongOrNull()
+            val price = runCatching { BigDecimal(comboPrice).takeIf { it.signum() > 0 }?.setScale(2, RoundingMode.HALF_UP)?.movePointRight(2)?.longValueExact() }.getOrNull()
             if (comboName.isBlank() || price == null || price <= 0 || draft.isEmpty()) message = "Enter combo name, valid price and at least one component."
             else scope.launch {
                 val id = UUID.randomUUID().toString()
-                val item = CatalogItem(id, comboName.trim(), "Combos", price * 100L, true)
-                db.dao().saveCatalogItem(item)
-                db.dao().replaceComboComponents(id, draft.map { it.copy(comboItemId = id) })
-                comboName = ""; comboPrice = ""; draft = emptyList(); message = "Combo saved. POS will calculate component recipes and FIFO stock at checkout."
+                val item = CatalogItem(id, comboName.trim(), "Combos", price, true)
+                runCatching { db.dao().saveCombo(item, draft.map { it.copy(comboItemId = id) }) }
+                    .onSuccess { comboName = ""; comboPrice = ""; draft = emptyList(); message = "Combo saved. POS will calculate component recipes and FIFO stock at checkout." }
+                    .onFailure { message = it.message ?: "Combo could not be saved." }
             }
         }, modifier = Modifier.fillMaxWidth()) { Text("Save combo") }
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.primary)
