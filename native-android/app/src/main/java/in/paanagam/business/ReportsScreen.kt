@@ -34,8 +34,8 @@ fun ReportsScreen(db: PaanagamDatabase, title: String) {
     val todaySales = today.sumOf { it.totalPaise }
     val todayCost = today.sumOf { costBySale[it.id] ?: 0L }
     val allSales = sales.filter { it.status == "COMPLETED" }
-    val cash = today.filter { it.paymentMethod == "CASH" }.sumOf { it.totalPaise }
-    val upi = today.filter { it.paymentMethod == "UPI" }.sumOf { it.totalPaise }
+    val cash = today.sumOf { it.cashPaidPaise }
+    val upi = today.sumOf { it.upiPaidPaise }
     val fmt = remember { SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()) }
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -66,6 +66,7 @@ fun ReportsScreen(db: PaanagamDatabase, title: String) {
                         Column(Modifier.weight(1f)) {
                             Text(fmt.format(Date(sale.createdAt)), color = ReportInk, fontWeight = FontWeight.Medium)
                             Text("${sale.paymentMethod} • ${sale.status}", color = Color(0xFF718078), style = MaterialTheme.typography.labelSmall)
+                            Text("Cash ${rupees(sale.cashPaidPaise)} • UPI ${rupees(sale.upiPaidPaise)}", color = Color(0xFF718078), style = MaterialTheme.typography.labelSmall)
                             Text("Ingredient cost ${rupees(cogs)}", color = Color(0xFF718078), style = MaterialTheme.typography.labelSmall)
                         }
                         Column {
