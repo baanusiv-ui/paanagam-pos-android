@@ -54,7 +54,7 @@ data class RecipeLine(@PrimaryKey val id: String, val menuItemId: String, val in
 data class SaleCost(@PrimaryKey val saleId: String, val ingredientCostPaise: Long)
 
 @Entity(tableName = "staff_members")
-data class StaffMember(@PrimaryKey val id: String, val name: String, val role: String, val pinSalt: String, val pinHash: String, val active: Boolean = true, val createdAt: Long)
+data class StaffMember(@PrimaryKey val id: String, val name: String, val role: String, val pinSalt: String, val pinHash: String, val active: Boolean = true, val createdAt: Long, val allowedModules: String = "")
 
 @Entity(tableName = "operational_records")
 data class OperationalRecord(
