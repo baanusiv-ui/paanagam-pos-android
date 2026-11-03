@@ -147,7 +147,7 @@ fun DatabaseBackupScreen(db: PaanagamDatabase, onRecreate: () -> Unit) {
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8E9))) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Important")
-                Text("A backup contains sales, stock, recipes, staff names and PIN hashes. Store it securely. Restoring replaces all current app data with the selected backup.")
+                Text("IMPORTANT: The exported .db backup is currently a raw, unencrypted SQLite file. It contains sales, stock, recipes, staff names and PIN hashes. Do not upload or share it; store it only in trusted local or USB storage. Encrypted backup export is still pending. Restoring replaces all current app data with the selected backup.")
             }
         }
         Button(
