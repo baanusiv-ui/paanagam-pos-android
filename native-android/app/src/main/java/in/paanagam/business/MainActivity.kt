@@ -337,6 +337,7 @@ private fun PaanagamApp(db: PaanagamDatabase, onRecreate: () -> Unit) {
 }
 
 private val ADMIN_ONLY_MODULES = setOf("Staff & HR", "WhatsApp Settings", "Data Backup")
+private val ADMIN_DATA_MODULES = setOf("Inventory", "Purchases", "Store → Kitchen", "Kitchen Stock", "Sales History", "Reports", "Food Cost", "Finance & P&L", "Stock Reconciliation", "Sales Reconciliation", "Suppliers")
 private val MANAGER_DEFAULT_MODULES = modules.filterNot { it in ADMIN_ONLY_MODULES + setOf("Business Planner", "Marketing Automation", "Automation Hub") }.toSet()
 private val CASHIER_DEFAULT_MODULES = setOf("Dashboard", "POS", "Orders", "Sales History", "Cash Shift")
 
@@ -350,7 +351,7 @@ private fun defaultModules(role: String): Set<String> = when (role) {
 private fun canAccess(staff: StaffMember, module: String): Boolean {
     if (!staff.active) return false
     if (staff.role == "ADMIN") return true
-    if (module in ADMIN_ONLY_MODULES) return false
+    if (module in ADMIN_ONLY_MODULES || module in ADMIN_DATA_MODULES) return false
     val allowed = when { staff.allowedModules.isBlank() -> defaultModules(staff.role); staff.allowedModules == "NONE" -> emptySet(); else -> staff.allowedModules.split("|").filter { it.isNotBlank() }.toSet() }
     return module in allowed
 }
