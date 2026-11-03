@@ -119,6 +119,14 @@ private val MIGRATION_12_13 = object : Migration(12, 13) {
     }
 }
 
+private val MIGRATION_17_18 = object : Migration(17, 18) {
+ override fun migrate(db: SupportSQLiteDatabase) {
+  db.execSQL("CREATE TABLE IF NOT EXISTS kitchen_tickets (saleId TEXT NOT NULL PRIMARY KEY, status TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL)")
+  db.execSQL("CREATE INDEX IF NOT EXISTS index_kitchen_tickets_status ON kitchen_tickets(status)")
+  db.execSQL("CREATE INDEX IF NOT EXISTS index_kitchen_tickets_createdAt ON kitchen_tickets(createdAt)")
+ }
+}
+
 private val MIGRATION_16_17 = object : Migration(16, 17) {
  override fun migrate(db: SupportSQLiteDatabase) {
   db.execSQL("CREATE TABLE IF NOT EXISTS combo_components (id TEXT NOT NULL PRIMARY KEY, comboItemId TEXT NOT NULL, componentItemId TEXT NOT NULL, componentName TEXT NOT NULL, quantity INTEGER NOT NULL)")
@@ -156,7 +164,7 @@ private val MIGRATION_9_10 = object : Migration(9, 10) {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17).build()
+        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18).build()
         setContent { PaanagamApp(db) }
     }
 }
@@ -278,6 +286,7 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                         "Suppliers" -> SuppliersScreen(db)
                         "Next-Day Planning" -> NextDayPlanningScreen(db)
                         "Combos" -> ComboPlanningScreen(db)
+                        "Kitchen KDS" -> KitchenKdsScreen(db)
                         else -> OperationalModuleScreen(db, selected)
                     }
                     }
