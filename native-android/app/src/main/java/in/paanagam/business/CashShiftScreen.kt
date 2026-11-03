@@ -12,6 +12,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import `in`.paanagam.business.data.CashShift
+import `in`.paanagam.business.data.CashMovement
 import `in`.paanagam.business.data.PaanagamDatabase
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -70,7 +71,7 @@ fun CashShiftScreen(db: PaanagamDatabase) {
                 val shiftId = active?.id ?: return@Button
                 busy = true
                 scope.launch {
-                    runCatching { db.dao().recordCashMovement(in.paanagam.business.data.CashMovement(UUID.randomUUID().toString(), shiftId, movementType, amount, movementNote.trim(), System.currentTimeMillis())) }
+                    runCatching { db.dao().recordCashMovement(CashMovement(id = UUID.randomUUID().toString(), shiftId = shiftId, type = movementType, amountPaise = amount, note = movementNote.trim(), createdAt = System.currentTimeMillis())) }
                         .onSuccess { movementAmount = ""; movementNote = ""; message = "Cash movement recorded." }
                         .onFailure { message = it.message ?: "Could not record cash movement." }
                     busy = false
