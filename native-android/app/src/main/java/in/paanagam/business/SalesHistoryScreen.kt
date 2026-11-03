@@ -56,6 +56,7 @@ fun SalesHistoryScreen(db: PaanagamDatabase) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("₹%.2f".format(sale.totalPaise / 100.0), color = HistoryGold, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                                 Text(sale.paymentMethod, color = HistoryIvory)
+                                Text("Cash ₹%.2f • UPI ₹%.2f".format(sale.cashPaidPaise / 100.0, sale.upiPaidPaise / 100.0), color = HistoryIvory, style = MaterialTheme.typography.labelSmall)
                             }
                             Text(formatter.format(Date(sale.createdAt)), color = HistoryIvory)
                             Text("Bill ${sale.id.take(8).uppercase(Locale.ROOT)} • ${sale.status} • ${sale.syncState}", color = HistoryIvory, style = MaterialTheme.typography.bodySmall)
