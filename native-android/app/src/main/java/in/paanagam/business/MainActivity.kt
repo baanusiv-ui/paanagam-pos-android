@@ -201,7 +201,6 @@ private val MIGRATION_22_23 = object : Migration(22, 23) {
 private val MIGRATION_23_24 = object : Migration(23, 24) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("CREATE TABLE IF NOT EXISTS cash_movements (id TEXT NOT NULL PRIMARY KEY, shiftId TEXT NOT NULL, type TEXT NOT NULL, amountPaise INTEGER NOT NULL, note TEXT NOT NULL, createdAt INTEGER NOT NULL)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS index_cash_movements_shiftId ON cash_movements(shiftId)")
     }
 }
 
