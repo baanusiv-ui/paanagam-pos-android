@@ -232,7 +232,7 @@ class MainActivity : ComponentActivity() {
 }
 
 private val modules = listOf(
-    "Dashboard","POS","Orders","Sales History","Menu","Inventory","Recipes & BOM / SOP","BOM","Modifiers","Combos",
+    "Dashboard","POS","Orders","Sales History","Menu","Inventory","Operating Expenses","Recipes & BOM / SOP","BOM","Modifiers","Combos",
     "Purchases","Store → Kitchen","Production","Kitchen Stock","Next-Day Planning","Kitchen KDS","Operations Control",
     "Cash Shift","Wastage","Customers","Food Cost","Finance & P&L","Reports","GST Calculator","Marketing Hub",
     "Marketing Automation","Automation Hub","WhatsApp Settings","Business Planner","Stock Reconciliation","Sales Reconciliation","Suppliers",
