@@ -81,6 +81,46 @@ fun PosScreen(db: PaanagamDatabase) {
         (!redeemFreeCoffee || (customerPhone.length == 10 && loyaltyRewards > 0 && coffeeItem != null))
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
+
+        if (showHeldOrders) {
+            AlertDialog(
+                onDismissRequest = { showHeldOrders = false },
+                title = { Text("Held orders (" + heldOrders.size + ")") },
+                text = {
+                    if (heldOrders.isEmpty()) Text("No held orders saved.")
+                    else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        heldOrders.forEach { held ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("₹%.2f".format(held.totalPaise / 100.0), fontWeight = FontWeight.Bold)
+                                    Text(if (held.customerPhone.isBlank()) "Walk-in customer" else held.customerPhone, style = MaterialTheme.typography.labelSmall)
+                                    Text(java.text.SimpleDateFormat("dd MMM, hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(held.createdAt)), style = MaterialTheme.typography.labelSmall)
+                                }
+                                TextButton(onClick = {
+                                    scope.launch {
+                                        val savedLines = db.dao().heldOrderLines(held.id)
+                                        val restored = savedLines.associate { line ->
+                                            val item = catalog.firstOrNull { it.id == line.itemId }
+                                                ?: CatalogItem(line.itemId, line.itemName, "Other", line.unitPricePaise)
+                                            line.itemId to (item to line.quantity)
+                                        }
+                                        cart = restored
+                                        customerPhone = held.customerPhone
+                                        db.dao().removeHeldOrder(held.id)
+                                        showHeldOrders = false
+                                        message = "Held order restored."
+                                    }
+                                }) { Text("Resume") }
+                                TextButton(onClick = { scope.launch { db.dao().removeHeldOrder(held.id) } }) { Text("Delete") }
+                            }
+                            HorizontalDivider()
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { showHeldOrders = false }) { Text("Close") } }
+            )
+        }
+
         val wide = maxWidth >= 760.dp
         if (wide) {
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
