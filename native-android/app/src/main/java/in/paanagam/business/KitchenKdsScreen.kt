@@ -16,60 +16,61 @@ import java.util.Locale
 @Composable
 fun KitchenKdsScreen(db: PaanagamDatabase) {
     val tickets by db.dao().kitchenTickets().collectAsState(initial = emptyList())
-    val sales by db.dao().sales().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var linesBySale by remember { mutableStateOf<Map<String, List<SaleLine>>>(emptyMap()) }
-    var filter by remember { mutableStateOf("ACTIVE") }
     var message by remember { mutableStateOf("") }
     LaunchedEffect(tickets) {
         val loaded = mutableMapOf<String, List<SaleLine>>()
         tickets.forEach { ticket -> loaded[ticket.saleId] = db.dao().saleLines(ticket.saleId) }
         linesBySale = loaded
     }
-    val visible = tickets.filter { if (filter == "ACTIVE") it.status != "COMPLETED" else it.status == "COMPLETED" }
+    val queued = tickets.count { it.status == "QUEUED" }
+    val preparing = tickets.count { it.status == "PREPARING" }
+    val ready = tickets.count { it.status == "READY" }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Kitchen display", style = MaterialTheme.typography.headlineSmall)
-        Text("Live tickets from POS • oldest orders first", style = MaterialTheme.typography.bodySmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = filter == "ACTIVE", onClick = { filter = "ACTIVE" }, label = { Text("Active (${tickets.count { it.status != "COMPLETED" }})") })
-            FilterChip(selected = filter == "COMPLETED", onClick = { filter = "COMPLETED" }, label = { Text("Completed") })
+        Text("Live POS tickets • oldest orders first", style = MaterialTheme.typography.bodySmall)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            KdsCount("Queued", queued, Modifier.weight(1f))
+            KdsCount("Preparing", preparing, Modifier.weight(1f))
+            KdsCount("Ready", ready, Modifier.weight(1f))
         }
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.primary)
-        if (visible.isEmpty()) Text(if (filter == "ACTIVE") "No active kitchen tickets." else "No completed tickets yet.")
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
-            items(visible, key = { it.saleId }) { ticket ->
-                val sale = sales.firstOrNull { it.id == ticket.saleId }
-                val lines = linesBySale[ticket.saleId].orEmpty()
+        if (tickets.isEmpty()) Text("No active kitchen tickets. New POS bills appear automatically.")
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+            items(tickets, key = { it.id }) { ticket ->
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Order #${ticket.saleId.take(6).uppercase()}", style = MaterialTheme.typography.titleMedium)
                             AssistChip(onClick = {}, label = { Text(ticket.status) })
                         }
-                        Text(SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(ticket.createdAt)) + " • " + (sale?.paymentMethod ?: "POS"))
-                        lines.forEach { line ->
+                        Text(SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(ticket.createdAt)))
+                        linesBySale[ticket.saleId].orEmpty().forEach { line ->
                             Text("${line.quantity} × ${line.itemName}", style = MaterialTheme.typography.bodyLarge)
                         }
-                        if (ticket.status != "COMPLETED") {
-                            val next = when (ticket.status) {
-                                "NEW" -> "PREPARING"
-                                "PREPARING" -> "READY"
-                                else -> "COMPLETED"
+                        val next = when (ticket.status) {
+                            "QUEUED" -> "PREPARING"
+                            "PREPARING" -> "READY"
+                            "READY" -> "SERVED"
+                            else -> ""
+                        }
+                        if (next.isNotBlank()) Button(onClick = {
+                            scope.launch {
+                                db.dao().updateKitchenTicketStatus(ticket.id, next, System.currentTimeMillis())
+                                message = "Order moved to $next."
                             }
-                            Button(onClick = {
-                                scope.launch {
-                                    db.dao().updateKitchenTicketStatus(ticket.saleId, next, System.currentTimeMillis())
-                                    message = "Order moved to $next."
-                                }
-                            }, modifier = Modifier.fillMaxWidth()) {
-                                Text(when (next) { "PREPARING" -> "Accept • Start preparing"; "READY" -> "Mark ready"; else -> "Complete order" })
-                            }
-                        } else {
-                            Text("Completed", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+                        }, modifier = Modifier.fillMaxWidth()) {
+                            Text(when (next) { "PREPARING" -> "Accept • Start preparing"; "READY" -> "Mark ready"; else -> "Mark served" })
                         }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun KdsCount(label: String, count: Int, modifier: Modifier = Modifier) {
+    Card(modifier) { Column(Modifier.padding(10.dp)) { Text(label, style = MaterialTheme.typography.labelSmall); Text(count.toString(), style = MaterialTheme.typography.titleLarge) } }
 }
