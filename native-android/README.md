@@ -54,6 +54,7 @@ The current APK is a development build. Do not use it for live business transact
 - Admin can deactivate and reactivate staff accounts.
 - Admin has full module access; Manager is restricted from staff administration and selected configuration modules; Cashier is limited to Dashboard, POS, Orders and Sales History.
 - Staff records are local to this device. There is no cloud account sync or remote recovery yet.
+- An authenticated staff session is forced back to the PIN login screen after the app has remained in the background for five minutes. Returning sooner preserves the active session.
 - Admin-only offline backup and restore uses Android's document picker. Backups are SQLite-integrity checked and schema-version checked before restore; the current database is preserved until validation passes. Device-level recovery testing is still required.
 
 
