@@ -484,6 +484,14 @@ private fun StaffLoginScreen(db: PaanagamDatabase, onLogin: (StaffMember) -> Uni
         val remaining = lockoutUntil - System.currentTimeMillis()
         error = if (remaining > 0L) "Too many incorrect PINs. Try again in ${(remaining + 999L) / 1000L} seconds." else ""
     }
+    LaunchedEffect(lockoutUntil) {
+        val remaining = lockoutUntil - System.currentTimeMillis()
+        if (remaining > 0L) {
+            kotlinx.coroutines.delay(remaining)
+            lockoutUntil = 0L
+            error = "Lockout expired. You can try again."
+        }
+    }
     Column(Modifier.fillMaxWidth().padding(top = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Staff login", color = Ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         staff.forEach { member ->
