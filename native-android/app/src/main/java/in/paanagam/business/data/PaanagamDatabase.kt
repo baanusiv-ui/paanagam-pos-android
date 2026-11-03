@@ -12,7 +12,7 @@ import java.util.UUID
 
 @Dao
 interface PaanagamDao {
-    @Query("SELECT * FROM staff_members WHERE active = 1 ORDER BY name")
+    @Query("SELECT * FROM staff_members ORDER BY active DESC, name")
     fun staffMembers(): Flow<List<StaffMember>>
     @Query("SELECT * FROM staff_members WHERE active = 1 ORDER BY createdAt LIMIT 1")
     suspend fun firstActiveStaff(): StaffMember?
