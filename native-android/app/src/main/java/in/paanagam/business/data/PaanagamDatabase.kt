@@ -244,6 +244,12 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
                 }
             }
             requirements.forEach { (ingredientId, required) ->
+                val ingredient = ingredient(ingredientId) ?: error("Recipe ingredient not found.")
+                if (ingredient.isCoffeePowder) {
+                    require(ingredient.baseUnit == "g" && required % 250000L == 0L) {
+                        "Coffee powder stock issues must be in 250 g multiples."
+                    }
+                }
                 totalIngredientCost = Math.addExact(totalIngredientCost, consumeFifo(ingredientId, "KITCHEN", required, sale.id, "SALE_CONSUMPTION", sale.createdAt))
             }
         }
@@ -366,6 +372,12 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
 
     @Transaction
     suspend fun saveWastage(item: WastageRecord) {
+        val ingredient = ingredient(item.ingredientId) ?: error("Wastage ingredient not found.")
+        if (ingredient.isCoffeePowder) {
+            require(ingredient.baseUnit == "g" && item.quantityBaseUnits % 250000L == 0L) {
+                "Coffee powder wastage must be recorded in 250 g multiples."
+            }
+        }
         val cost = consumeFifo(item.ingredientId, item.location, item.quantityBaseUnits, item.id, "WASTAGE", item.recordedAt)
         insertWastage(item.copy(costPaise = cost))
     }
