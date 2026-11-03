@@ -84,7 +84,7 @@ The current APK is a development build. Do not use it for live business transact
 - Cash shift expected drawer balance now includes opening float + cash sales + cash-in − cash-out/refunds/withdrawals. Every drawer adjustment requires a positive amount and reason and is tied to the currently open shift.
 - Room migration 23 → 24 creates the cash-movement ledger without deleting existing shift or sales data.
 
-Remaining audit items requiring additional work/device verification: pre-completion POS cancellation/void audit; partial refunds; loyalty reversal on refund; configurable POS tax; real printer/UPI QR integrations; full statutory accounting; encrypted database and backup recovery; complete business workflows for placeholder operational modules. Full-bill refunds require an explicit stock disposition: only unopened, safe returns are restocked; served/opened/unsafe items are recorded as wastage. UPI reversal must still be performed in the UPI app. The app remains a local single-device POS; no multi-device sync is claimed.
+Remaining audit items requiring additional work/device verification: partial refunds; loyalty reversal on refund; configurable POS tax; real printer/UPI QR integrations; full statutory accounting; live SQLCipher database encryption and recovery; complete business workflows for placeholder operational modules. Full-bill refunds require an explicit stock disposition: only unopened, safe returns are restocked; served/opened/unsafe items are recorded as wastage. UPI reversal must still be performed in the UPI app. The app remains a local single-device POS; no multi-device sync is claimed.
 
 
 ## 360° CCTV and POS cancellation audit
@@ -96,7 +96,7 @@ Remaining audit items requiring additional work/device verification: pre-complet
 - Full-bill refund now requires an explicit stock disposition. Safe, unopened returned stock is restored to its original FIFO lot; served, opened or unsafe food remains consumed and is recorded as wastage. Refund remains atomic with cash ledger, sale status, KDS cancellation and CCTV bookmark.
 - Added local-network permissions and restricted the CCTV module to Admin.
 - Device dependency: generic RTSP is a video transport, not a universal record/clip-control API. This build creates a durable local timestamp bookmark; automatic camera-side clip retrieval/recording trigger and ONVIF PTZ/fisheye dewarping require the selected camera/NVR's supported ONVIF recording profile or vendor API. Verify the exact model before enabling that claim in production.
-- Pre-completion POS cart cancellation/void is not yet linked to a durable CCTV audit event. The current bookmark workflow covers completed-sale refunds only.
+- Pre-completion cart cancellation now records a durable local audit bookmark with cashier identity, required reason, amount and timestamp before the cart is cleared. Individual cart-line removals are also logged. These are local timestamp bookmarks, not proof that camera-side recording or clip retrieval was triggered.
 - The new viewer and audit log still require Android build verification and physical camera testing. Do not treat this feature as production CCTV evidence until a real camera stream and clip retrieval are validated.
 
 - Fresh Admin PIN re-authentication is required before opening Staff & HR, Data Backup/Restore, and CCTV & Audit. Re-authentication has its own persistent failed-attempt counter and escalating lockout, separate from the normal staff-login counter. This is an in-app gate; device-level verification and review of every sensitive write action remain required.
@@ -111,7 +111,7 @@ Remaining audit items requiring additional work/device verification: pre-complet
 
 ## Database encryption migration — safety gate
 
-The live Room database is still a plaintext SQLite database. Portable backups are also currently raw SQLite files. Do not describe either as encrypted or share exported backups as if they were protected.
+The live Room database is still a plaintext SQLite database. Portable backup files are separately protected by the AES-256-GCM passphrase envelope described below. Do not describe the live database as encrypted.
 
 The SQLCipher Android Community Edition artifact is available from Maven Central and its upstream project documents Room 2 integration. Integration is deliberately not enabled until the existing plaintext database can be converted and recovered safely.
 
@@ -124,7 +124,7 @@ Required migration invariants before enabling SQLCipher:
 5. Portable backups must use a separate user-held passphrase and authenticated encryption so they can be restored on a replacement device; a key protected only by the source device's Android Keystore is not a portable backup.
 6. Test new install, existing install, empty database, corrupted database, wrong key, interrupted conversion, insufficient storage, restore to another device, and rollback. Include sales, sale lines, FIFO lots/movements, staff, cash shifts, refunds, loyalty and CCTV audit data in preservation checks.
 
-Until these gates pass, retain the existing Room open path and prominently warn that backups contain sensitive unencrypted data.
+Until these gates pass, retain the existing Room open path and prominently warn that the live on-device database is unencrypted. Portable encrypted backups require the user's separate passphrase.
 
 
 ## Portable backup encryption (0.2.10 work in progress)
