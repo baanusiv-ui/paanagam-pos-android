@@ -14,7 +14,23 @@ import java.util.UUID
 @Dao
 interface PaanagamDao {
 
-    @Query("SELECT * FROM next_day_plans ORDER BY planDate DESC, menuItemName")
+    @Query("SELECT * FROM combo_components WHERE comboItemId = :comboItemId ORDER BY componentName")
+suspend fun comboComponents(comboItemId: String): List<ComboComponent>
+@Query("SELECT * FROM combo_components ORDER BY comboItemId, componentName")
+fun allComboComponents(): Flow<List<ComboComponent>>
+@Insert(onConflict = OnConflictStrategy.ABORT)
+suspend fun insertComboComponent(component: ComboComponent)
+@Query("DELETE FROM combo_components WHERE comboItemId = :comboItemId")
+suspend fun deleteComboComponents(comboItemId: String)
+@Transaction
+suspend fun replaceComboComponents(comboItemId: String, components: List<ComboComponent>) {
+ require(components.isNotEmpty() && components.all { it.comboItemId == comboItemId && it.quantity > 0 && it.componentItemId != comboItemId })
+ require(components.map { it.componentItemId }.distinct().size == components.size)
+ deleteComboComponents(comboItemId)
+ components.forEach { insertComboComponent(it) }
+}
+
+@Query("SELECT * FROM next_day_plans ORDER BY planDate DESC, menuItemName")
     fun nextDayPlans(): Flow<List<NextDayPlan>>
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertNextDayPlan(plan: NextDayPlan)
@@ -155,12 +171,27 @@ interface PaanagamDao {
         var totalIngredientCost = 0L
         lines.forEach { line ->
             require(line.quantity > 0)
-            val configuredRecipe = recipeLines(line.itemId)
-            require(configuredRecipe.isNotEmpty()) { "Recipe missing for ${line.itemName}. Configure its ingredients before selling." }
-            configuredRecipe.forEach { recipe ->
-                val required = Math.multiplyExact(recipe.quantityBaseUnits, line.quantity.toLong())
-                totalIngredientCost = Math.addExact(totalIngredientCost,
-                    consumeFifo(recipe.ingredientId, "KITCHEN", required, sale.id, "SALE_CONSUMPTION", sale.createdAt))
+            val components = comboComponents(line.itemId)
+            val requirements = mutableMapOf<String, Long>()
+            if (components.isNotEmpty()) {
+                components.forEach { component ->
+                    val componentRecipe = recipeLines(component.componentItemId)
+                    require(componentRecipe.isNotEmpty()) { "Recipe missing for combo component ${component.componentName}." }
+                    componentRecipe.forEach { recipe ->
+                        val qty = Math.multiplyExact(Math.multiplyExact(recipe.quantityBaseUnits, component.quantity.toLong()), line.quantity.toLong())
+                        requirements[recipe.ingredientId] = Math.addExact(requirements[recipe.ingredientId] ?: 0L, qty)
+                    }
+                }
+            } else {
+                val configuredRecipe = recipeLines(line.itemId)
+                require(configuredRecipe.isNotEmpty()) { "Recipe missing for ${line.itemName}. Configure its ingredients before selling." }
+                configuredRecipe.forEach { recipe ->
+                    val qty = Math.multiplyExact(recipe.quantityBaseUnits, line.quantity.toLong())
+                    requirements[recipe.ingredientId] = Math.addExact(requirements[recipe.ingredientId] ?: 0L, qty)
+                }
+            }
+            requirements.forEach { (ingredientId, required) ->
+                totalIngredientCost = Math.addExact(totalIngredientCost, consumeFifo(ingredientId, "KITCHEN", required, sale.id, "SALE_CONSUMPTION", sale.createdAt))
             }
         }
         recordSale(saleWithShift)
@@ -323,7 +354,7 @@ interface PaanagamDao {
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, Supplier::class, NextDayPlan::class], version = 16, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, Supplier::class, NextDayPlan::class, ComboComponent::class], version = 17, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
