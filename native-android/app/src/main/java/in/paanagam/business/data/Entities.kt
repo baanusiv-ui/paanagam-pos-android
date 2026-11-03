@@ -82,3 +82,16 @@ data class StockReconciliation(
 
 @Entity(tableName = "loyalty_accounts")
 data class LoyaltyAccount(@PrimaryKey val phone: String, val customerName: String, val coffeeProgress: Int = 0, val freeCoffeesAvailable: Int = 0, val lifetimeCoffeeCount: Int = 0, val updatedAt: Long)
+
+@Entity(tableName = "cash_shifts")
+data class CashShift(
+    @PrimaryKey val id: String,
+    val openedAt: Long,
+    val openingFloatPaise: Long,
+    val closedAt: Long? = null,
+    val expectedCashPaise: Long? = null,
+    val countedCashPaise: Long? = null,
+    val variancePaise: Long? = null,
+    val notes: String = "",
+    val status: String = "OPEN"
+)
