@@ -18,6 +18,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 private val OpsInk = Color(0xFF263A32)
 private val OpsGreen = Color(0xFF16845B)
@@ -25,6 +27,7 @@ private val OpsMuted = Color(0xFF718078)
 
 private val moduleGuidance = mapOf(
     "Orders" to "Record phone, counter or advance orders. POS bills remain the official completed-sale record.",
+    "Operating Expenses" to "Record rent, wages, utilities, repairs, transport and other overheads. These expenses are included in operating profit; ingredient cost remains separate.",
     "Combos" to "Define combo offers here for planning. Recipe deductions still happen only through configured POS item recipes.",
     "Modifiers" to "Record modifier options and price adjustments for menu setup review.",
     "BOM" to "Record bill-of-material notes. Recipe quantities used by POS are configured in Recipes & BOM / SOP.",
@@ -55,9 +58,11 @@ fun OperationalModuleScreen(db: PaanagamDatabase, module: String) {
     var status by remember(module) { mutableStateOf("OPEN") }
     var message by remember(module) { mutableStateOf("") }
     val isGst = module == "GST Calculator"
-    val gstRate by remember { mutableStateOf(5.0) }
-    val amountValue = amount.toDoubleOrNull() ?: 0.0
-    val gstValue = if (isGst) amountValue * gstRate / 100.0 else 0.0
+    var gstRate by remember { mutableStateOf("5") }
+    val amountValue = amount.toBigDecimalOrNull() ?: BigDecimal.ZERO
+    val gstRateValue = gstRate.toBigDecimalOrNull() ?: BigDecimal.ZERO
+    val gstValue = if (isGst) amountValue.multiply(gstRateValue).divide(BigDecimal("100"), 2, RoundingMode.HALF_UP) else BigDecimal.ZERO
+    val amountPaise = runCatching { amountValue.movePointRight(2).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
     val guidance = moduleGuidance[module] ?: "Record and review ${module.lowercase(Locale.getDefault())} information locally."
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -69,9 +74,12 @@ fun OperationalModuleScreen(db: PaanagamDatabase, module: String) {
                 OutlinedTextField(title, { title = it }, label = { Text(if (isGst) "Description" else "Title / reference") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 OutlinedTextField(details, { details = it }, label = { Text(if (isGst) "Notes (inclusive or exclusive amount)" else "Details / notes") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
                 OutlinedTextField(amount, { amount = it.filter { ch -> ch.isDigit() || ch == '.' }.take(12) }, label = { Text(if (isGst) "Taxable amount (₹)" else "Amount (₹), if applicable") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
-                if (isGst && amountValue > 0) {
-                    Text("Illustrative GST at 5%: ₹%.2f • Total: ₹%.2f".format(gstValue, amountValue + gstValue), color = OpsGreen, fontWeight = FontWeight.SemiBold)
-                    Text("Rate is fixed for this quick estimate only; verify the correct HSN/SAC rate.", color = OpsMuted, style = MaterialTheme.typography.labelSmall)
+                if (isGst) {
+                    OutlinedTextField(gstRate, { gstRate = it.filter { ch -> ch.isDigit() || ch == '.' }.take(5) }, label = { Text("GST rate (%)") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
+                    if (amountValue > BigDecimal.ZERO && gstRateValue >= BigDecimal.ZERO) {
+                        Text("Estimated GST: ₹$gstValue • Total: ₹${amountValue.add(gstValue).setScale(2, RoundingMode.HALF_UP)}", color = OpsGreen, fontWeight = FontWeight.SemiBold)
+                        Text("Confirm the applicable HSN/SAC rate with your accountant. This is a calculation aid, not a tax filing.", color = OpsMuted, style = MaterialTheme.typography.labelSmall)
+                    }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("OPEN", "IN PROGRESS", "DONE").forEach { value ->
@@ -80,11 +88,11 @@ fun OperationalModuleScreen(db: PaanagamDatabase, module: String) {
                 }
                 Button(onClick = {
                     if (title.isBlank()) message = "Enter a title or reference."
-                    else if (amount.isNotBlank() && (amount.toDoubleOrNull() == null || amountValue < 0)) message = "Enter a valid amount."
+                    else if (amount.isNotBlank() && (amountPaise == null || amountPaise < 0)) message = "Enter a valid amount with up to 2 decimal places."
                     else scope.launch {
                         val record = OperationalRecord(
                             UUID.randomUUID().toString(), module, title.trim(), details.trim(),
-                            ((amount.toDoubleOrNull() ?: 0.0) * 100.0).toLong(), status, System.currentTimeMillis()
+                            amountPaise ?: 0L, status, System.currentTimeMillis()
                         )
                         runCatching { db.dao().insertOperationalRecord(record) }
                             .onSuccess { title = ""; details = ""; amount = ""; status = "OPEN"; message = "Saved on this device." }
