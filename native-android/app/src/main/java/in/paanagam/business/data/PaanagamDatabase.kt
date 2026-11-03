@@ -165,6 +165,8 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     suspend fun staffById(id: String): StaffMember?
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertStaff(member: StaffMember)
+    @Update
+    suspend fun updateStaff(member: StaffMember)
     @Query("UPDATE staff_members SET pinSalt = :salt, pinHash = :hash WHERE id = :id")
     suspend fun resetStaffPin(id: String, salt: String, hash: String)
     @Query("UPDATE staff_members SET active = :active WHERE id = :id")
@@ -418,7 +420,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class, HeldOrder::class, HeldOrderLine::class, SalesReconciliation::class], version = 21, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class, HeldOrder::class, HeldOrderLine::class, SalesReconciliation::class], version = 22, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
