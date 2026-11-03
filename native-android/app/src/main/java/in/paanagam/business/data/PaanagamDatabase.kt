@@ -74,6 +74,8 @@ interface PaanagamDao {
     suspend fun saleCost(saleId: String): SaleCost?
     @Query("SELECT * FROM sales ORDER BY createdAt DESC")
     fun sales(): Flow<List<Sale>>
+    @Query("SELECT * FROM sale_costs")
+    fun saleCosts(): Flow<List<SaleCost>>
     @Query("SELECT * FROM sale_lines WHERE saleId = :saleId")
     suspend fun saleLines(saleId: String): List<SaleLine>
     @Query("SELECT * FROM sop_documents ORDER BY category, title")
