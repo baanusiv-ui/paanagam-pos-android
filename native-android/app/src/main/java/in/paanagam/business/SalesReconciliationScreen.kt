@@ -18,6 +18,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import java.time.LocalDate
 
 @Composable
 fun SalesReconciliationScreen(db: PaanagamDatabase) {
@@ -38,8 +39,10 @@ fun SalesReconciliationScreen(db: PaanagamDatabase) {
     val countedPaise = ((cashCounted.toDoubleOrNull() ?: 0.0) * 100.0).toLong()
     val upiVariance = receivedPaise - posUpi
     val cashVariance = countedPaise - posCash
-    val validDate = runCatching { dateFormat.isLenient = false; dateFormat.parse(businessDate) != null }.getOrDefault(false)
-    val validInputs = (upiReceived.toDoubleOrNull() ?: -1.0) >= 0.0 && (cashCounted.toDoubleOrNull() ?: -1.0) >= 0.0
+    val validDate = runCatching { LocalDate.parse(businessDate); true }.getOrDefault(false)
+    val upiValue = upiReceived.toDoubleOrNull()
+    val cashValue = cashCounted.toDoubleOrNull()
+    val validInputs = upiReceived.isNotBlank() && cashCounted.isNotBlank() && upiValue != null && cashValue != null && upiValue.isFinite() && cashValue.isFinite() && upiValue >= 0.0 && cashValue >= 0.0
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Daily settlement check", style = MaterialTheme.typography.titleLarge, color = Color(0xFF2B1B12), fontWeight = FontWeight.Bold)
