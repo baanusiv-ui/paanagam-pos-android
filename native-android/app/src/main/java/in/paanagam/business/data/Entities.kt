@@ -53,3 +53,14 @@ data class SaleCost(@PrimaryKey val saleId: String, val ingredientCostPaise: Lon
 
 @Entity(tableName = "staff_members")
 data class StaffMember(@PrimaryKey val id: String, val name: String, val role: String, val pinSalt: String, val pinHash: String, val active: Boolean = true, val createdAt: Long)
+
+@Entity(tableName = "operational_records")
+data class OperationalRecord(
+    @PrimaryKey val id: String,
+    val module: String,
+    val title: String,
+    val details: String,
+    val amountPaise: Long,
+    val status: String,
+    val createdAt: Long
+)
