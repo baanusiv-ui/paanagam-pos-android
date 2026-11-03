@@ -236,6 +236,7 @@ fun PosScreen(db: PaanagamDatabase) {
                     newName = newName, onNewName = { newName = it },
                     newCategory = newCategory, onNewCategory = { newCategory = it },
                     newPrice = newPrice, onNewPrice = { newPrice = it },
+                    newIsCoffee = newIsCoffee, onNewIsCoffee = { newIsCoffee = it },
                     onSaveNew = {
                         val price = newPrice.toDoubleOrNull()
                         if (newName.isBlank() || price == null || price <= 0) message = "Enter a menu item and a valid price."
