@@ -12,7 +12,6 @@ import androidx.compose.ui.unit.dp
 import `in`.paanagam.business.data.PaanagamDatabase
 import `in`.paanagam.business.data.Sale
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -24,13 +23,8 @@ fun ReportsScreen(db: PaanagamDatabase, title: String) {
     val sales by db.dao().sales().collectAsState(initial = emptyList())
     val costs by db.dao().saleCosts().collectAsState(initial = emptyList())
     val costBySale = remember(costs) { costs.associate { it.saleId to it.ingredientCostPaise } }
-    val dayStart = remember {
-        Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-    }
-    val today = sales.filter { it.createdAt >= dayStart && it.status == "COMPLETED" }
+    val todayKey = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
+    val today = sales.filter { SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date(it.createdAt)) == todayKey && it.status == "COMPLETED" }
     val todaySales = today.sumOf { it.totalPaise }
     val todayCost = today.sumOf { costBySale[it.id] ?: 0L }
     val allSales = sales.filter { it.status == "COMPLETED" }
