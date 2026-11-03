@@ -311,6 +311,40 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     suspend fun saveSaleCost(cost: SaleCost)
     @Query("SELECT * FROM sale_costs WHERE saleId = :saleId")
     suspend fun saleCost(saleId: String): SaleCost?
+    @Query("SELECT * FROM sales WHERE id = :saleId")
+    suspend fun saleById(saleId: String): Sale?
+    @Query("UPDATE sales SET status = :status WHERE id = :saleId")
+    suspend fun updateSaleStatus(saleId: String, status: String)
+    @Query("SELECT * FROM stock_movements WHERE referenceId = :saleId AND movementType = 'SALE_CONSUMPTION'")
+    suspend fun saleConsumptionMovements(saleId: String): List<StockMovement>
+    @Query("SELECT * FROM stock_lots WHERE id = :lotId")
+    suspend fun stockLot(lotId: String): StockLot?
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertSaleRefund(refund: SaleRefund)
+    @Query("SELECT * FROM sale_refunds WHERE saleId = :saleId ORDER BY refundedAt DESC")
+    suspend fun saleRefunds(saleId: String): List<SaleRefund>
+    @Transaction
+    suspend fun refundCompletedSale(saleId: String, reason: String, refundedAt: Long, cashRefundPaise: Long, upiRefundPaise: Long) {
+        require(reason.isNotBlank()) { "Enter a refund reason." }
+        val sale = saleById(saleId) ?: error("Sale not found.")
+        require(sale.status == "COMPLETED") { "Only completed, not-yet-refunded sales can be refunded." }
+        require(cashRefundPaise >= 0 && upiRefundPaise >= 0)
+        require(Math.addExact(cashRefundPaise, upiRefundPaise) == sale.totalPaise) { "Refund split must equal the original bill total." }
+        val movements = saleConsumptionMovements(saleId)
+        require(movements.isNotEmpty()) { "No original stock consumption was found. Refund blocked to avoid an incomplete stock reversal." }
+        movements.forEach { movement ->
+            val lot = stockLot(movement.lotId) ?: error("Original FIFO lot is missing. Refund blocked.")
+            require(lot.ingredientId == movement.ingredientId && lot.location == movement.fromLocation && movement.quantityBaseUnits > 0)
+            updateLotBalance(lot.id, Math.addExact(lot.remainingBaseUnits, movement.quantityBaseUnits))
+            insertStockMovement(StockMovement(UUID.randomUUID().toString(), movement.ingredientId, lot.id, "SALE_REFUND_RESTOCK", "", lot.location, movement.quantityBaseUnits, movement.unitCostPaise, saleId, refundedAt))
+        }
+        if (cashRefundPaise > 0) {
+            val shift = getOpenCashShift() ?: error("Open a cash shift before issuing a cash refund.")
+            insertCashMovement(CashMovement(UUID.randomUUID().toString(), shift.id, "REFUND", cashRefundPaise, "Sale $saleId • $reason", refundedAt))
+        }
+        insertSaleRefund(SaleRefund(UUID.randomUUID().toString(), saleId, refundedAt, sale.totalPaise, cashRefundPaise, upiRefundPaise, reason.trim()))
+        updateSaleStatus(saleId, "REFUNDED")
+    }
     @Query("SELECT * FROM sales ORDER BY createdAt DESC")
     fun sales(): Flow<List<Sale>>
     @Query("SELECT * FROM sale_costs")
