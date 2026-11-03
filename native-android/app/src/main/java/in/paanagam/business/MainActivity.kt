@@ -228,6 +228,27 @@ private val MIGRATION_26_27 = object : Migration(26, 27) {
 }
 
 class MainActivity : ComponentActivity() {
+    private val sessionPrefs by lazy { getSharedPreferences("paanagam_session_security", MODE_PRIVATE) }
+    private var forcingSessionRelogin = false
+
+    override fun onStart() {
+        super.onStart()
+        val backgroundedAt = sessionPrefs.getLong("backgrounded_at", 0L)
+        if (!forcingSessionRelogin && backgroundedAt > 0L &&
+            System.currentTimeMillis() - backgroundedAt >= 5 * 60 * 1000L) {
+            forcingSessionRelogin = true
+            sessionPrefs.edit().remove("backgrounded_at").apply()
+            recreate()
+        } else {
+            sessionPrefs.edit().remove("backgrounded_at").apply()
+        }
+    }
+
+    override fun onStop() {
+        sessionPrefs.edit().putLong("backgrounded_at", System.currentTimeMillis()).apply()
+        super.onStop()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
