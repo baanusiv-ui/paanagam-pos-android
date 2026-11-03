@@ -69,3 +69,15 @@ The current APK is a development build. Do not use it for live business transact
 - Keystore-backed app/device identity and admin-authorized device transfer are not yet implemented.
 - Admin re-authentication before protected data access, audit logging, encrypted backup/restore and backup recovery testing remain required.
 - Device-level tests for role navigation, database migration, FIFO accounting, sales rollback, backup/restore, offline operation, UPI and printer hardware remain required.
+
+
+## Page-logic corrections in progress (0.2.6 / Room schema 24)
+
+- POS now validates that every bill line belongs to the sale, has a positive quantity, has a mathematically correct line total, and that all line totals equal the bill total before FIFO consumption.
+- Combo creation validates component existence and recipe readiness, uses decimal rupee pricing, and saves the menu item and component rows in one Room transaction to avoid orphan combo items.
+- Inventory balances now observe stock-ledger movements so purchase receipts, transfers, production, wastage and reconciliation refresh displayed Store/Kitchen balances without waiting for ingredient-master edits.
+- Daily sales report groups by the device's current local calendar date rather than freezing midnight at screen creation.
+- Cash shift expected drawer balance now includes opening float + cash sales + cash-in − cash-out/refunds/withdrawals. Every drawer adjustment requires a positive amount and reason and is tied to the currently open shift.
+- Room migration 23 → 24 creates the cash-movement ledger without deleting existing shift or sales data.
+
+Remaining audit items requiring additional work/device verification: auditable sale cancellation/refund with stock and payment reversals; fully configurable tax; real printer/UPI QR integrations; full operating-expense accounting; automated tests for FIFO rounding and all migrations; encrypted database and backup recovery; complete business workflows for placeholder operational modules. The app remains a local single-device POS; no multi-device sync is claimed.
