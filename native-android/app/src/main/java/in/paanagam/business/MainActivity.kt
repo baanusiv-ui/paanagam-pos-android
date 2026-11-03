@@ -305,7 +305,10 @@ private fun StaffAdminScreen(db: PaanagamDatabase, current: StaffMember) {
                     Text(member.name + " • " + member.role, color = Ink, fontWeight = FontWeight.Bold)
                     Row {
                         TextButton(onClick = { scope.launch { if (pin.length !in 4..8) message = "Enter a 4–8 digit PIN above, then tap Reset." else { val c = pinCredentials(pin); db.dao().resetStaffPin(member.id, c.first, c.second); pin = ""; message = "PIN reset." } } }) { Text("Reset PIN") }
-                        if (member.id != current.id) TextButton(onClick = { scope.launch { db.dao().setStaffActive(member.id, false); message = "Account deactivated." } }) { Text("Deactivate") }
+                        if (member.id != current.id) {
+                            if (member.active) TextButton(onClick = { scope.launch { db.dao().setStaffActive(member.id, false); message = "Account deactivated." } }) { Text("Deactivate") }
+                            else TextButton(onClick = { scope.launch { db.dao().setStaffActive(member.id, true); message = "Account reactivated." } }) { Text("Reactivate") }
+                        }
                     }
                 }
             }
