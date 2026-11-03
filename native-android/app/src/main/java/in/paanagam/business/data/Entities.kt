@@ -149,3 +149,14 @@ data class SalesReconciliation(
     val note: String,
     val reconciledAt: Long
 )
+
+@Entity(tableName = "sale_refunds", indices = [Index(value = ["saleId"])])
+data class SaleRefund(
+    @PrimaryKey val id: String,
+    val saleId: String,
+    val refundedAt: Long,
+    val amountPaise: Long,
+    val cashRefundPaise: Long,
+    val upiRefundPaise: Long,
+    val reason: String
+)
