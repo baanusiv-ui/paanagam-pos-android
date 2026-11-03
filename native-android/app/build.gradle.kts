@@ -6,7 +6,7 @@ plugins {
 }
 android {
     namespace = "in.paanagam.business"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         applicationId = "in.paanagam.business"
         minSdk = 26
