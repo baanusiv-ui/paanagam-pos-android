@@ -47,7 +47,10 @@ fun ComboPlanningScreen(db: PaanagamDatabase) {
         Text("Combo planning", style = MaterialTheme.typography.headlineSmall)
         Text("Create a sellable combo from existing menu items. POS expands every component recipe and consumes combined ingredient quantities using FIFO.", style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(comboName, { comboName = it }, label = { Text("Combo name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(comboPrice, { comboPrice = it.filter(Char::isDigit) }, label = { Text("Selling price (₹)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(comboPrice, { value ->
+            val filtered = value.filter { it.isDigit() || it == '.' }
+            comboPrice = if (filtered.count { it == '.' } <= 1) filtered else comboPrice
+        }, label = { Text("Selling price (₹)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         Box {
             OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) { Text(selectedItem?.name ?: "Choose menu component") }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -77,12 +80,18 @@ fun ComboPlanningScreen(db: PaanagamDatabase) {
         Button(onClick = {
             val price = runCatching { BigDecimal(comboPrice).takeIf { it.signum() > 0 }?.setScale(2, RoundingMode.HALF_UP)?.movePointRight(2)?.longValueExact() }.getOrNull()
             if (comboName.isBlank() || price == null || price <= 0 || draft.isEmpty()) message = "Enter combo name, valid price and at least one component."
-            else scope.launch {
+            else {
+                val missing = draft.filter { part ->
+                    catalog.none { it.id == part.componentItemId && it.active } || db.dao().recipeLines(part.componentItemId).isEmpty()
+                }
+                if (missing.isNotEmpty()) message = "Configure recipes for: " + missing.joinToString { it.componentName }
+                else scope.launch {
                 val id = UUID.randomUUID().toString()
                 val item = CatalogItem(id, comboName.trim(), "Combos", price, true)
                 runCatching { db.withTransaction { val dao = db.dao(); dao.saveCatalogItem(item); dao.replaceComboComponents(id, draft.map { it.copy(comboItemId = id) }) } }
                     .onSuccess { comboName = ""; comboPrice = ""; draft = emptyList(); message = "Combo saved. POS will calculate component recipes and FIFO stock at checkout." }
                     .onFailure { message = it.message ?: "Combo could not be saved." }
+                }
             }
         }, modifier = Modifier.fillMaxWidth()) { Text("Save combo") }
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.primary)
