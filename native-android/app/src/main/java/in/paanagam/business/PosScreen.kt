@@ -130,6 +130,20 @@ fun PosScreen(db: PaanagamDatabase) {
                     onIncrease = { id, item, qty -> cart = cart + (id to (item to qty + 1)) },
                     onRemove = { id -> cart = cart - id },
                     onClear = { cart = emptyMap(); redeemFreeCoffee = false; message = "" },
+                    onHold = {
+                        val heldId = UUID.randomUUID().toString()
+                        scope.launch {
+                            runCatching {
+                                db.dao().saveHeldOrder(
+                                    HeldOrder(heldId, System.currentTimeMillis(), customerPhone, total),
+                                    cartItems.map { (item, qty) -> HeldOrderLine(UUID.randomUUID().toString(), heldId, item.id, item.name, qty, item.pricePaise) }
+                                )
+                            }.onSuccess {
+                                cart = emptyMap(); customerPhone = ""; redeemFreeCoffee = false
+                                message = "Order held and saved on this device."
+                            }.onFailure { message = it.message ?: "Could not hold order." }
+                        }
+                    },
                     onCheckout = {
                         saving = true
                         val saleId = UUID.randomUUID().toString()
@@ -196,6 +210,20 @@ fun PosScreen(db: PaanagamDatabase) {
                     onIncrease = { id, item, qty -> cart = cart + (id to (item to qty + 1)) },
                     onRemove = { id -> cart = cart - id },
                     onClear = { cart = emptyMap(); redeemFreeCoffee = false; message = "" },
+                    onHold = {
+                        val heldId = UUID.randomUUID().toString()
+                        scope.launch {
+                            runCatching {
+                                db.dao().saveHeldOrder(
+                                    HeldOrder(heldId, System.currentTimeMillis(), customerPhone, total),
+                                    cartItems.map { (item, qty) -> HeldOrderLine(UUID.randomUUID().toString(), heldId, item.id, item.name, qty, item.pricePaise) }
+                                )
+                            }.onSuccess {
+                                cart = emptyMap(); customerPhone = ""; redeemFreeCoffee = false
+                                message = "Order held and saved on this device."
+                            }.onFailure { message = it.message ?: "Could not hold order." }
+                        }
+                    },
                     onCheckout = {
                         saving = true
                         val saleId = UUID.randomUUID().toString()
