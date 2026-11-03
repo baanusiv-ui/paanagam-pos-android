@@ -133,3 +133,16 @@ data class HeldOrder(@PrimaryKey val id: String, val createdAt: Long, val custom
 
 @Entity(tableName = "held_order_lines", indices = [Index(value = ["orderId"])])
 data class HeldOrderLine(@PrimaryKey val id: String, val orderId: String, val itemId: String, val itemName: String, val quantity: Int, val unitPricePaise: Long)
+
+
+@Entity(tableName = "sales_reconciliations")
+data class SalesReconciliation(
+    @PrimaryKey val id: String,
+    val businessDate: String,
+    val posCashPaise: Long,
+    val posUpiPaise: Long,
+    val settledUpiPaise: Long,
+    val countedCashPaise: Long,
+    val note: String,
+    val reconciledAt: Long
+)
