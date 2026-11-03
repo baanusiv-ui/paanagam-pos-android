@@ -19,6 +19,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 @Composable
 fun CashShiftScreen(db: PaanagamDatabase) {
@@ -34,7 +36,9 @@ fun CashShiftScreen(db: PaanagamDatabase) {
     var movementAmount by remember { mutableStateOf("") }
     var movementNote by remember { mutableStateOf("") }
     val movements by db.dao().cashMovements(active?.id ?: "").collectAsState(initial = emptyList())
-    val money: (String) -> Long? = { value -> value.toDoubleOrNull()?.takeIf { it >= 0 }?.let { (it * 100).toLong() } }
+    val money: (String) -> Long? = { value ->
+        runCatching { BigDecimal(value).movePointRight(2).setScale(0, RoundingMode.UNNECESSARY).longValueExact().takeIf { it >= 0 } }.getOrNull()
+    }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Cash shift control", color = Color(0xFF16845B), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         if (active == null) {
