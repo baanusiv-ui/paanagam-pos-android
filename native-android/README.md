@@ -100,3 +100,28 @@ Remaining audit items requiring additional work/device verification: pre-complet
 - The new viewer and audit log still require Android build verification and physical camera testing. Do not treat this feature as production CCTV evidence until a real camera stream and clip retrieval are validated.
 
 - Fresh Admin PIN re-authentication is required before opening Staff & HR, Data Backup/Restore, and CCTV & Audit. Re-authentication has its own persistent failed-attempt counter and escalating lockout, separate from the normal staff-login counter. This is an in-app gate; device-level verification and review of every sensitive write action remain required.
+
+
+## Admin re-authentication hardening (0.2.9)
+
+- Opening Staff & HR, Data Backup, and CCTV & Audit requires a fresh Admin PIN verification.
+- Re-authentication failures use a separate persistent per-Admin counter and lockout deadline; the staff login counter is not reused.
+- Lockout timing is centralized in `PinLockoutPolicy` and covered by JVM tests for threshold, exponential backoff, cap, deadline arithmetic and overflow.
+- CI has passed for the current Admin re-authentication implementation and its follow-up documentation commit. Device-level verification is still required.
+
+## Database encryption migration — safety gate
+
+The live Room database is still a plaintext SQLite database. Portable backups are also currently raw SQLite files. Do not describe either as encrypted or share exported backups as if they were protected.
+
+The SQLCipher Android Community Edition artifact is available from Maven Central and its upstream project documents Room 2 integration. Integration is deliberately not enabled until the existing plaintext database can be converted and recovered safely.
+
+Required migration invariants before enabling SQLCipher:
+
+1. Generate a cryptographically random database key and wrap it with an Android Keystore AES-GCM key; never hardcode or store the database key in preferences.
+2. Preserve the original plaintext database untouched while creating an encrypted temporary database. Never point the SQLCipher Room factory at the existing plaintext file.
+3. Validate the encrypted temporary database before switching: SQLCipher can reopen it with the wrapped key, integrity check passes, Room schema version is 27, and representative business tables retain their row counts.
+4. Make the swap atomic and restart-safe. A process kill, low-storage condition, wrong key or failed validation must leave the original database recoverable and must never trigger an empty-database fallback.
+5. Portable backups must use a separate user-held passphrase and authenticated encryption so they can be restored on a replacement device; a key protected only by the source device's Android Keystore is not a portable backup.
+6. Test new install, existing install, empty database, corrupted database, wrong key, interrupted conversion, insufficient storage, restore to another device, and rollback. Include sales, sale lines, FIFO lots/movements, staff, cash shifts, refunds, loyalty and CCTV audit data in preservation checks.
+
+Until these gates pass, retain the existing Room open path and prominently warn that backups contain sensitive unencrypted data.
