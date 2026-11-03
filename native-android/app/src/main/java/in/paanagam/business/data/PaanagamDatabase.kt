@@ -245,10 +245,8 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
             }
             requirements.forEach { (ingredientId, required) ->
                 val ingredient = ingredient(ingredientId) ?: error("Recipe ingredient not found.")
-                if (ingredient.isCoffeePowder) {
-                    require(ingredient.baseUnit == "g" && required % 250000L == 0L) {
-                        "Coffee powder stock issues must be in 250 g multiples."
-                    }
+                require(!ingredient.isCoffeePowder) {
+                    "Coffee powder is a production ingredient. Prepare decoction first; POS recipes must consume decoction, milk and sugar."
                 }
                 totalIngredientCost = Math.addExact(totalIngredientCost, consumeFifo(ingredientId, "KITCHEN", required, sale.id, "SALE_CONSUMPTION", sale.createdAt))
             }
