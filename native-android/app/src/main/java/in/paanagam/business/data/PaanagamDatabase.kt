@@ -92,7 +92,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     suspend fun insertCashShift(shift: CashShift)
     @Update
     suspend fun updateCashShift(shift: CashShift)
-    @Query("SELECT COALESCE(SUM(totalPaise), 0) FROM sales WHERE paymentMethod = 'CASH' AND status = 'COMPLETED' AND shiftId = :shiftId")
+    @Query("SELECT COALESCE(SUM(cashPaidPaise), 0) FROM sales WHERE status = 'COMPLETED' AND shiftId = :shiftId")
     suspend fun cashSalesTotal(shiftId: String): Long
     @Transaction
     suspend fun openCashShift(shift: CashShift) {
@@ -192,9 +192,22 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     @Transaction
     suspend fun completeSale(sale: Sale, lines: List<SaleLine>) {
         require(lines.isNotEmpty()) { "Bill has no items" }
+        val cashPortion = when (sale.paymentMethod) {
+            "CASH" -> sale.totalPaise
+            "UPI" -> 0L
+            "SPLIT" -> sale.cashPaidPaise
+            else -> error("Unsupported payment method.")
+        }
+        val upiPortion = when (sale.paymentMethod) {
+            "CASH" -> 0L
+            "UPI" -> sale.totalPaise
+            "SPLIT" -> sale.upiPaidPaise
+            else -> 0L
+        }
+        require(cashPortion >= 0 && upiPortion >= 0 && cashPortion + upiPortion == sale.totalPaise) { "Cash and UPI amounts must equal the bill total." }
         val activeShift = getOpenCashShift()
-        require(sale.paymentMethod != "CASH" || activeShift != null) { "Open a cash shift before accepting cash payments." }
-        val saleWithShift = sale.copy(shiftId = activeShift?.id)
+        require(cashPortion == 0L || activeShift != null) { "Open a cash shift before accepting cash payments." }
+        val saleWithShift = sale.copy(shiftId = if (cashPortion > 0) activeShift?.id else null, cashPaidPaise = cashPortion, upiPaidPaise = upiPortion)
         val rewardLines = lines.filter { it.itemName.contains("coffee", ignoreCase = true) && it.unitPricePaise == 0L }
         require(rewardLines.size <= 1 && rewardLines.all { it.quantity == 1 }) { "Only one free coffee can be redeemed per bill." }
         val loyaltyBefore = if (rewardLines.isNotEmpty()) {
