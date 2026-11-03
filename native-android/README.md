@@ -54,3 +54,18 @@ The current APK is a development build. Do not use it for live business transact
 - Admin has full module access; Manager is restricted from staff administration and selected configuration modules; Cashier is limited to Dashboard, POS, Orders and Sales History.
 - Staff records are local to this device. There is no cloud account sync or remote recovery yet.
 - Admin-only offline backup and restore uses Android's document picker. Backups are SQLite-integrity checked and schema-version checked before restore; the current database is preserved until validation passes. Device-level recovery testing is still required.
+
+
+## Audit hardening started (0.2.5 / schema 23)
+
+- Coffee loyalty classification is an explicit menu-item flag, not a name substring. Admin/menu setup must mark qualifying paid coffee products as eligible; unrelated products with names containing "coffee" no longer earn rewards.
+- Room schema migration 22 → 23 adds the explicit coffee flag with a safe default of false for existing menu rows.
+- Sensitive inventory, purchase, stock-transfer, kitchen-stock, sales-history, reports, food-cost, finance, stock/sales reconciliation and supplier views are restricted to Admin. Cashier/Manager module customization cannot grant these protected views.
+- Existing Cashier/Manager module assignments remain local and PIN hashes remain PBKDF2-based.
+
+## Security and production hardening still in progress
+
+- SQLCipher database encryption and safe migration of existing plaintext installations are not yet enabled. Do not represent the current database as encrypted.
+- Keystore-backed app/device identity and admin-authorized device transfer are not yet implemented.
+- Admin re-authentication before protected data access, audit logging, encrypted backup/restore and backup recovery testing remain required.
+- Device-level tests for role navigation, database migration, FIFO accounting, sales rollback, backup/restore, offline operation, UPI and printer hardware remain required.
