@@ -541,12 +541,13 @@ private fun StaffLoginScreen(db: PaanagamDatabase, onLogin: (StaffMember) -> Uni
                         error = ""
                         onLogin(member)
                     } else {
-                        val attempts = securityPrefs.getInt("failed_attempts_$selectedId", 0) + 1
+                        val attempts = PinLockoutPolicy.nextFailedAttempt(
+                            securityPrefs.getInt("failed_attempts_$selectedId", 0)
+                        )
                         securityPrefs.edit().putInt("failed_attempts_$selectedId", attempts).apply()
-                        if (attempts >= 5) {
-                            val exponent = (attempts - 5).coerceAtMost(5)
-                            val delayMs = (30_000L * (1L shl exponent)).coerceAtMost(15 * 60_000L)
-                            val newUntil = now + delayMs
+                        if (PinLockoutPolicy.isLockoutRequired(attempts)) {
+                            val delayMs = PinLockoutPolicy.lockoutDurationMillis(attempts)
+                            val newUntil = PinLockoutPolicy.lockoutDeadlineMillis(now, attempts)
                             securityPrefs.edit().putLong("lockout_until_$selectedId", newUntil).apply()
                             lockoutUntil = newUntil
                             error = "Too many incorrect PINs. Login locked for ${delayMs / 1000L} seconds."
