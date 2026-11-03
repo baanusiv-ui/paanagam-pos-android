@@ -64,7 +64,7 @@ internal object PaanagamDatabaseSecurity {
             }
             try {
                 verifyEncryptedDatabase(live, key)
-                check(recovery.delete()) { "Encrypted database is ready, but the plaintext recovery copy could not be deleted." }
+                // Keep the plaintext recovery copy until Room opens and completes schema migrations.
             } catch (failure: Throwable) {
                 live.delete()
                 recovery.renameTo(live)
@@ -73,7 +73,7 @@ internal object PaanagamDatabaseSecurity {
         } else if (live.exists()) {
             try {
                 verifyEncryptedDatabase(live, key, checkIntegrity = false)
-                if (recovery.exists()) recovery.delete()
+                // Preserve recovery until MainActivity confirms Room can open.
             } catch (failure: Throwable) {
                 if (recovery.exists()) {
                     live.delete()
