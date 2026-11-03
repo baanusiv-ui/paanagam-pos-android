@@ -1,6 +1,7 @@
 package `in`.paanagam.business
 
 import android.os.Bundle
+import android.provider.Settings
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,6 +26,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import `in`.paanagam.business.data.PaanagamDatabase
 import `in`.paanagam.business.data.SopDocument
 import `in`.paanagam.business.data.StaffMember
+import `in`.paanagam.business.data.DeviceBinding
 import android.util.Base64
 import java.security.SecureRandom
 import javax.crypto.SecretKeyFactory
@@ -221,6 +223,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+            ?: error("Android device identifier is unavailable.")
         val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26).build()
         val liveFile = getDatabasePath("paanagam-local.db")
         val recoveryFile = getDatabasePath("paanagam-before-restore.db")
@@ -235,7 +239,7 @@ class MainActivity : ComponentActivity() {
             }
             throw failure
         }
-        setContent { PaanagamApp(db) { recreate() } }
+        setContent { PaanagamApp(db, androidId) { recreate() } }
     }
 }
 
@@ -249,12 +253,19 @@ private val modules = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PaanagamApp(db: PaanagamDatabase, onRecreate: () -> Unit) {
+private fun PaanagamApp(db: PaanagamDatabase, androidId: String, onRecreate: () -> Unit) {
     var selected by remember { mutableStateOf("Dashboard") }
     var activeStaff by remember { mutableStateOf<StaffMember?>(null) }
     var firstStaffExists by remember { mutableStateOf<Boolean?>(null) }
+    var deviceTransferRequired by remember { mutableStateOf(false) }
+    var deviceTransferMessage by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(db) { firstStaffExists = db.dao().firstActiveStaff() != null }
+    LaunchedEffect(db, androidId) {
+        val staffExists = db.dao().firstActiveStaff() != null
+        firstStaffExists = staffExists
+        val binding = db.dao().deviceBinding()
+        deviceTransferRequired = staffExists && (binding == null || binding.androidId != androidId)
+    }
     var showMore by remember { mutableStateOf(false) }
     val sops by db.dao().sops().collectAsState(initial = emptyList())
     val primaryTabs = listOf("Dashboard", "POS", "Inventory", "Sales History", "More")
@@ -324,12 +335,34 @@ private fun PaanagamApp(db: PaanagamDatabase, onRecreate: () -> Unit) {
                     firstStaffExists == false -> AdminSetupScreen { name, pin ->
                         scope.launch {
                             val c = pinCredentials(pin)
-                            db.dao().insertStaff(StaffMember(UUID.randomUUID().toString(), name.trim(), "ADMIN", c.first, c.second, true, System.currentTimeMillis()))
+                            val admin = StaffMember(UUID.randomUUID().toString(), name.trim(), "ADMIN", c.first, c.second, true, System.currentTimeMillis())
+                            db.dao().insertStaff(admin)
+                            db.dao().saveDeviceBinding(DeviceBinding(androidId = androidId, boundAt = System.currentTimeMillis(), approvedByStaffId = admin.id))
                             firstStaffExists = true
                             activeStaff = db.dao().firstActiveStaff()
+                            deviceTransferRequired = false
                         }
                     }
-                    activeStaff == null -> StaffLoginScreen(db) { activeStaff = it }
+                    activeStaff == null -> {
+                        if (deviceTransferRequired) {
+                            Text("This database is registered to another Android device. Sign in with an administrator PIN to approve this device transfer.", color = Color(0xFFC26A27))
+                        }
+                        if (deviceTransferMessage.isNotBlank()) Text(deviceTransferMessage, color = Color(0xFFC26A27))
+                        StaffLoginScreen(db) { staff ->
+                            if (deviceTransferRequired && staff.role != "ADMIN") {
+                                deviceTransferMessage = "Only an administrator can approve a device change."
+                            } else {
+                                scope.launch {
+                                    if (deviceTransferRequired) {
+                                        db.dao().saveDeviceBinding(DeviceBinding(androidId = androidId, boundAt = System.currentTimeMillis(), approvedByStaffId = staff.id))
+                                        deviceTransferRequired = false
+                                        deviceTransferMessage = "Device transfer approved by " + staff.name + "."
+                                    }
+                                    activeStaff = staff
+                                }
+                            }
+                        }
+                    }
                     !canAccess(activeStaff!!, selected) -> { selected = "Dashboard"; Text("Access restricted.", color = Color(0xFFC26A27)) }
                     showMore -> {
                     MoreModulesScreen(modules.filterNot { it in primaryTabs }.filter { canAccess(activeStaff!!, it) }) { module ->
