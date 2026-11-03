@@ -146,8 +146,18 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     @Transaction
     suspend fun reconcileStock(record: StockReconciliation, item: Ingredient) {
         require(record.location == "STORE" || record.location == "KITCHEN")
-        require(record.physicalQtyBaseUnits >= 0)
-        val variance = record.physicalQtyBaseUnits - record.systemQtyBaseUnits
+        require(record.ingredientId == item.id) { "Reconciliation ingredient does not match the selected ingredient." }
+        require(record.physicalQtyBaseUnits >= 0 && record.systemQtyBaseUnits >= 0)
+        require(record.adjustmentCostPaise >= 0)
+        if (item.isCoffeePowder) {
+            require(item.baseUnit == "g" && record.physicalQtyBaseUnits % 250000L == 0L) {
+                "Coffee powder physical counts must be in 250 g multiples."
+            }
+        }
+        require(stockBalance(item.id, record.location) == record.systemQtyBaseUnits) {
+            "Stock changed after the count was opened. Refresh the system balance and recount."
+        }
+        val variance = Math.subtractExact(record.physicalQtyBaseUnits, record.systemQtyBaseUnits)
         require(variance == record.varianceBaseUnits)
         if (variance > 0) {
             val lot = StockLot(UUID.randomUUID().toString(), item.id, record.location, record.reconciledAt, variance, variance, item.baseUnit, record.adjustmentCostPaise)
@@ -406,6 +416,9 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     @Transaction
     suspend fun receivePurchase(purchase: Purchase, lines: List<PurchaseLine>, lots: List<StockLot>) {
         require(lines.isNotEmpty() && lines.size == lots.size)
+        require(lines.all { line -> line.purchaseId == purchase.id && line.quantityBaseUnits > 0 && line.unitCostPaise >= 0 })
+        require(lines.map { it.id }.distinct().size == lines.size && lines.map { it.lotId }.distinct().size == lines.size)
+        require(lines.zip(lots).all { (line, lot) -> line.ingredientId == lot.ingredientId && lot.location == "STORE" && lot.remainingBaseUnits == line.quantityBaseUnits && lot.receivedBaseUnits == line.quantityBaseUnits && lot.id == line.lotId && lot.unitCostPaise == line.unitCostPaise })
         insertPurchase(purchase)
         lines.zip(lots).forEach { (line, lot) ->
             require(line.quantityBaseUnits > 0 && line.unitCostPaise >= 0)
@@ -420,8 +433,9 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     suspend fun transferFifo(transfer: StockTransfer, ingredientId: String, quantityBaseUnits: Long) {
         require(quantityBaseUnits > 0)
         val item = ingredient(ingredientId) ?: error("Ingredient not found")
+        require(transfer.fromLocation in listOf("STORE", "KITCHEN") && transfer.toLocation in listOf("STORE", "KITCHEN"))
+        require(transfer.fromLocation != transfer.toLocation)
         if (item.isCoffeePowder) require(quantityBaseUnits % 250000L == 0L) { "Coffee powder transfers must be in 250 g multiples" }
-        require(transfer.fromLocation != transfer.toLocation && transfer.fromLocation in listOf("STORE", "KITCHEN") && transfer.toLocation in listOf("STORE", "KITCHEN"))
         insertStockTransfer(transfer)
         val lots = fifoLots(ingredientId, transfer.fromLocation)
         require(lots.sumOf { it.remainingBaseUnits } >= quantityBaseUnits) { "Insufficient stock" }
