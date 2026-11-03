@@ -23,6 +23,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import `in`.paanagam.business.data.PaanagamDatabase
 import `in`.paanagam.business.data.SopDocument
+import `in`.paanagam.business.data.StaffMember
+import android.util.Base64
+import java.security.SecureRandom
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.PBEKeySpec
+import java.util.UUID
+import kotlinx.coroutines.launch
 
 private val Espresso = Color(0xFF263A32)
 private val Ivory = Color(0xFFF5F8F5)
@@ -79,10 +86,16 @@ private val MIGRATION_6_7 = object : Migration(6, 7) {
         db.execSQL("ALTER TABLE ingredients ADD COLUMN kitchenMinStockBaseUnits INTEGER NOT NULL DEFAULT 0")
     }
 }
+private val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS staff_members (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL, pinSalt TEXT NOT NULL, pinHash TEXT NOT NULL, active INTEGER NOT NULL, createdAt INTEGER NOT NULL)")
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build()
+        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).build()
         setContent { PaanagamApp(db) }
     }
 }
@@ -99,6 +112,10 @@ private val modules = listOf(
 @Composable
 private fun PaanagamApp(db: PaanagamDatabase) {
     var selected by remember { mutableStateOf("Dashboard") }
+    var activeStaff by remember { mutableStateOf<StaffMember?>(null) }
+    var firstStaffExists by remember { mutableStateOf<Boolean?>(null) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(db) { firstStaffExists = db.dao().firstActiveStaff() != null }
     var showMore by remember { mutableStateOf(false) }
     val sops by db.dao().sops().collectAsState(initial = emptyList())
     val primaryTabs = listOf("Dashboard", "POS", "Inventory", "Sales History", "More")
@@ -119,7 +136,10 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                         }
                     },
                     actions = {
-                        Text("காபியும் >< கதையும்", color = Gold, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 14.dp))
+                        if (activeStaff != null) {
+                            Text(activeStaff!!.name + " • " + activeStaff!!.role, color = Gold, style = MaterialTheme.typography.labelSmall)
+                            TextButton(onClick = { activeStaff = null; selected = "Dashboard" }) { Text("Logout") }
+                        } else Text("காபியும் >< கதையும்", color = Gold, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 14.dp))
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Ivory)
                 )
@@ -160,12 +180,25 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                 Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (showMore) {
-                    MoreModulesScreen(modules.filterNot { it in primaryTabs }) { module ->
+                when {
+                    firstStaffExists == null -> CircularProgressIndicator()
+                    firstStaffExists == false -> AdminSetupScreen { name, pin ->
+                        scope.launch {
+                            val c = pinCredentials(pin)
+                            db.dao().insertStaff(StaffMember(UUID.randomUUID().toString(), name.trim(), "ADMIN", c.first, c.second, true, System.currentTimeMillis()))
+                            firstStaffExists = true
+                            activeStaff = db.dao().firstActiveStaff()
+                        }
+                    }
+                    activeStaff == null -> StaffLoginScreen(db) { activeStaff = it }
+                    !canAccess(activeStaff!!.role, selected) -> { selected = "Dashboard"; Text("Access restricted.", color = Color(0xFFC26A27)) }
+                    showMore -> {
+                    MoreModulesScreen(modules.filterNot { it in primaryTabs }.filter { canAccess(activeStaff!!.role, it) }) { module ->
                         selected = module
                         showMore = false
                     }
-                } else {
+                    }
+                    else -> {
                     when (selected) {
                         "Dashboard" -> DashboardScreen(db, onNavigate = { selected = it })
                         "Sales History" -> SalesHistoryScreen(db)
@@ -176,7 +209,103 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                         "Inventory", "Purchases", "Store → Kitchen", "Kitchen Stock" -> InventoryScreen(db, selected)
                         "Production", "Wastage" -> ProductionScreen(db)
                         "WhatsApp Settings" -> WhatsAppSettingsScreen()
+                        "Staff & HR" -> StaffAdminScreen(db, activeStaff!!)
                         else -> ModuleScreen(selected)
+                    }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun canAccess(role: String, module: String): Boolean = when (role) {
+    "ADMIN" -> true
+    "MANAGER" -> module !in listOf("Staff & HR", "WhatsApp Settings", "Business Planner", "Marketing Automation", "Automation Hub")
+    "CASHIER" -> module in listOf("Dashboard", "POS", "Orders", "Sales History")
+    else -> false
+}
+
+private fun pinCredentials(pin: String): Pair<String, String> {
+    require(pin.length in 4..8 && pin.all { it.isDigit() })
+    val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
+    val spec = PBEKeySpec(pin.toCharArray(), salt, 120000, 256)
+    val hash = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
+    spec.clearPassword()
+    return Base64.encodeToString(salt, Base64.NO_WRAP) to Base64.encodeToString(hash, Base64.NO_WRAP)
+}
+
+private fun verifyPin(pin: String, saltText: String, hashText: String): Boolean = try {
+    val salt = Base64.decode(saltText, Base64.NO_WRAP)
+    val expected = Base64.decode(hashText, Base64.NO_WRAP)
+    val spec = PBEKeySpec(pin.toCharArray(), salt, 120000, 256)
+    val actual = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
+    spec.clearPassword()
+    java.security.MessageDigest.isEqual(expected, actual)
+} catch (_: Exception) { false }
+
+@Composable
+private fun AdminSetupScreen(onCreate: (String, String) -> Unit) {
+    var name by remember { mutableStateOf("Admin") }
+    var pin by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
+    Column(Modifier.fillMaxWidth().padding(top = 36.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Set up Paanagam Admin", color = Ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text("Create the first administrator account. Choose a private 4–8 digit PIN.", color = Color(0xFF65736B))
+        OutlinedTextField(name, { name = it }, label = { Text("Admin name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("Admin PIN") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(confirm, { confirm = it.filter(Char::isDigit).take(8) }, label = { Text("Confirm PIN") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        if (error.isNotBlank()) Text(error, color = Color.Red)
+        Button(onClick = { if (name.isBlank() || pin.length !in 4..8 || pin != confirm) error = "Enter a name and matching 4–8 digit PIN." else onCreate(name, pin) }, modifier = Modifier.fillMaxWidth()) { Text("Create Admin account") }
+    }
+}
+
+@Composable
+private fun StaffLoginScreen(db: PaanagamDatabase, onLogin: (StaffMember) -> Unit) {
+    val staff by db.dao().staffMembers().collectAsState(initial = emptyList())
+    var selectedId by remember { mutableStateOf("") }
+    var pin by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(staff) { if (selectedId.isBlank()) selectedId = staff.firstOrNull()?.id.orEmpty() }
+    Column(Modifier.fillMaxWidth().padding(top = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Staff login", color = Ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        staff.forEach { member ->
+            Row(Modifier.fillMaxWidth().clickable { selectedId = member.id }.background(if (selectedId == member.id) Mint else White, RoundedCornerShape(12.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(selected = selectedId == member.id, onClick = { selectedId = member.id })
+                Column { Text(member.name, color = Ink, fontWeight = FontWeight.Medium); Text(member.role, color = Color(0xFF718078), style = MaterialTheme.typography.labelSmall) }
+            }
+        }
+        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("PIN") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        if (error.isNotBlank()) Text(error, color = Color.Red)
+        Button(onClick = { scope.launch { val member = staff.firstOrNull { it.id == selectedId }; if (member != null && verifyPin(pin, member.pinSalt, member.pinHash)) { error = ""; onLogin(member) } else error = "Incorrect PIN. Try again." } }, modifier = Modifier.fillMaxWidth()) { Text("Login") }
+    }
+}
+
+@Composable
+private fun StaffAdminScreen(db: PaanagamDatabase, current: StaffMember) {
+    val staff by db.dao().staffMembers().collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
+    var name by remember { mutableStateOf("") }
+    var pin by remember { mutableStateOf("") }
+    var role by remember { mutableStateOf("CASHIER") }
+    var message by remember { mutableStateOf("") }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Staff access management", color = Gold, style = MaterialTheme.typography.titleLarge)
+        Text("Create accounts, reset PINs and deactivate access. PINs are salted PBKDF2 hashes stored locally.", color = Color(0xFF65736B))
+        OutlinedTextField(name, { name = it }, label = { Text("Staff name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("Initial / reset PIN (4–8 digits)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        Row { FilterChip(selected = role == "CASHIER", onClick = { role = "CASHIER" }, label = { Text("Cashier") }); Spacer(Modifier.width(8.dp)); FilterChip(selected = role == "MANAGER", onClick = { role = "MANAGER" }, label = { Text("Manager") }) }
+        Button(onClick = { scope.launch { if (name.isBlank() || pin.length !in 4..8) message = "Enter staff name and valid PIN." else { val c = pinCredentials(pin); db.dao().insertStaff(StaffMember(UUID.randomUUID().toString(), name.trim(), role, c.first, c.second, true, System.currentTimeMillis())); name = ""; pin = ""; message = "Staff account created." } } }, modifier = Modifier.fillMaxWidth()) { Text("Create staff account") }
+        if (message.isNotBlank()) Text(message, color = Gold)
+        staff.forEach { member ->
+            Card(colors = CardDefaults.cardColors(containerColor = White), shape = RoundedCornerShape(14.dp)) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(member.name + " • " + member.role, color = Ink, fontWeight = FontWeight.Bold)
+                    Row {
+                        TextButton(onClick = { scope.launch { if (pin.length !in 4..8) message = "Enter a 4–8 digit PIN above, then tap Reset." else { val c = pinCredentials(pin); db.dao().resetStaffPin(member.id, c.first, c.second); pin = ""; message = "PIN reset." } } }) { Text("Reset PIN") }
+                        if (member.id != current.id) TextButton(onClick = { scope.launch { db.dao().setStaffActive(member.id, false); message = "Account deactivated." } }) { Text("Deactivate") }
                     }
                 }
             }
