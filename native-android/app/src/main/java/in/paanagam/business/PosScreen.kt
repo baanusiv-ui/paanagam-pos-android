@@ -22,7 +22,12 @@ import java.util.UUID
  val recipeLines by db.dao().allRecipeLines().collectAsState(initial=emptyList())
  val scope=rememberCoroutineScope()
  var name by remember { mutableStateOf("") }; var category by remember { mutableStateOf("Beverages") }; var price by remember { mutableStateOf("") }
- var customerPhone by remember { mutableStateOf("") }; var cart by remember { mutableStateOf<Map<String,Pair<CatalogItem,Int>>>(emptyMap()) }; var payment by remember { mutableStateOf("CASH") }; var msg by remember { mutableStateOf("") }
+ var customerPhone by remember { mutableStateOf("") }; var loyaltyRewards by remember { mutableIntStateOf(0) }; var redeemFreeCoffee by remember { mutableStateOf(false) }; var cart by remember { mutableStateOf<Map<String,Pair<CatalogItem,Int>>>(emptyMap()) }; var payment by remember { mutableStateOf("CASH") }; var msg by remember { mutableStateOf("") }
+ LaunchedEffect(customerPhone) {
+  loyaltyRewards = if (customerPhone.length == 10) db.dao().loyaltyAccount(customerPhone)?.freeCoffeesAvailable ?: 0 else 0
+  redeemFreeCoffee = false
+ }
+ val coffeeItem = cart.values.map { it.first }.firstOrNull { it.name.contains("coffee", ignoreCase = true) }
  val total=cart.values.sumOf { it.first.pricePaise*it.second }
  val missingRecipes = cart.values.map { it.first }.filter { item -> recipeLines.none { it.menuItemId == item.id } }
  Column(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(7.dp)) {
@@ -49,6 +54,12 @@ import java.util.UUID
   } }
   OutlinedTextField(customerPhone,{customerPhone=it.filter(Char::isDigit).take(10)},label={Text("Customer mobile (optional, for loyalty)")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Phone),singleLine=true,modifier=Modifier.fillMaxWidth())
   if(cart.isNotEmpty()) {
+   if (loyaltyRewards > 0 && coffeeItem != null && customerPhone.length == 10) {
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+     Checkbox(checked=redeemFreeCoffee,onCheckedChange={redeemFreeCoffee=it})
+     Text("Redeem 1 free coffee (available: $loyaltyRewards)",color=Color(0xFFDDB36C))
+    }
+   }
    Text("Total ₹%.2f".format(total/100.0),color=Color(0xFFDDB36C),style=MaterialTheme.typography.titleLarge)
    if (missingRecipes.isNotEmpty()) {
     Text("Recipe required before sale: " + missingRecipes.joinToString { it.name }, color=Color(0xFFFFB36B))
@@ -56,12 +67,13 @@ import java.util.UUID
    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
     FilterChip(selected=payment=="CASH",onClick={payment="CASH"},label={Text("Cash")})
     FilterChip(selected=payment=="UPI",onClick={payment="UPI"},label={Text("UPI")})
-    Button(enabled=missingRecipes.isEmpty(),onClick={
+    Button(enabled=missingRecipes.isEmpty() && (!redeemFreeCoffee || (customerPhone.length == 10 && loyaltyRewards > 0 && coffeeItem != null)),onClick={
      val id=UUID.randomUUID().toString()
-     val lines=cart.values.map{(i,q)->SaleLine(UUID.randomUUID().toString(),id,i.id,i.name,q,i.pricePaise,i.pricePaise*q)}
+     val lines=cart.values.map{(i,q)->SaleLine(UUID.randomUUID().toString(),id,i.id,i.name,q,i.pricePaise,i.pricePaise*q)}.toMutableList()
+     if (redeemFreeCoffee && coffeeItem != null) lines.add(SaleLine(UUID.randomUUID().toString(),id,coffeeItem.id,coffeeItem.name,1,0L,0L))
      scope.launch {
       runCatching { db.dao().completeSale(Sale(id,System.currentTimeMillis(),total,payment,customerPhone=customerPhone),lines) }
-       .onSuccess { cart=emptyMap();customerPhone="";msg="Sale saved offline. Coffee loyalty updated when eligible." }
+       .onSuccess { cart=emptyMap();customerPhone="";redeemFreeCoffee=false;loyaltyRewards=0;msg="Sale saved offline. Loyalty updated and reward redeemed if selected." }
        .onFailure { msg=it.message ?: "Sale could not be saved" }
      }
     }){Text("Complete sale")}
