@@ -332,6 +332,8 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     suspend fun fifoLots(ingredientId: String, location: String): List<StockLot>
     @Query("UPDATE stock_lots SET remainingBaseUnits = :remaining WHERE id = :lotId")
     suspend fun updateLotBalance(lotId: String, remaining: Long)
+    @Query("SELECT * FROM stock_movements ORDER BY createdAt DESC")
+    fun stockMovements(): Flow<List<StockMovement>>
     @Query("SELECT COALESCE(SUM(remainingBaseUnits), 0) FROM stock_lots WHERE ingredientId = :ingredientId AND location = :location")
     suspend fun stockBalance(ingredientId: String, location: String): Long
 
