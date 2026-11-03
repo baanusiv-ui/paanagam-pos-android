@@ -471,22 +471,67 @@ private fun AdminSetupScreen(onCreate: (String, String) -> Unit) {
 private fun StaffLoginScreen(db: PaanagamDatabase, onLogin: (StaffMember) -> Unit) {
     val allStaff by db.dao().staffMembers().collectAsState(initial = emptyList())
     val staff = allStaff.filter { it.active }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val securityPrefs = remember { context.getSharedPreferences("paanagam_login_security", android.content.Context.MODE_PRIVATE) }
     var selectedId by remember { mutableStateOf("") }
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
+    var lockoutUntil by remember { mutableLongStateOf(0L) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(staff) { if (selectedId.isBlank()) selectedId = staff.firstOrNull()?.id.orEmpty() }
+    LaunchedEffect(selectedId) {
+        lockoutUntil = securityPrefs.getLong("lockout_until_$selectedId", 0L)
+        val remaining = lockoutUntil - System.currentTimeMillis()
+        error = if (remaining > 0L) "Too many incorrect PINs. Try again in ${(remaining + 999L) / 1000L} seconds." else ""
+    }
     Column(Modifier.fillMaxWidth().padding(top = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Staff login", color = Ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         staff.forEach { member ->
-            Row(Modifier.fillMaxWidth().clickable { selectedId = member.id }.background(if (selectedId == member.id) Mint else White, RoundedCornerShape(12.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = selectedId == member.id, onClick = { selectedId = member.id })
+            Row(Modifier.fillMaxWidth().clickable { selectedId = member.id; pin = "" }.background(if (selectedId == member.id) Mint else White, RoundedCornerShape(12.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(selected = selectedId == member.id, onClick = { selectedId = member.id; pin = "" })
                 Column { Text(member.name, color = Ink, fontWeight = FontWeight.Medium); Text(member.role, color = Color(0xFF718078), style = MaterialTheme.typography.labelSmall) }
             }
         }
-        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("PIN") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("PIN") }, singleLine = true, enabled = System.currentTimeMillis() >= lockoutUntil, modifier = Modifier.fillMaxWidth())
         if (error.isNotBlank()) Text(error, color = Color.Red)
-        Button(onClick = { scope.launch { val member = staff.firstOrNull { it.id == selectedId }; if (member != null && verifyPin(pin, member.pinSalt, member.pinHash)) { error = ""; onLogin(member) } else error = "Incorrect PIN. Try again." } }, modifier = Modifier.fillMaxWidth()) { Text("Login") }
+        Button(
+            onClick = {
+                scope.launch {
+                    val now = System.currentTimeMillis()
+                    val member = staff.firstOrNull { it.id == selectedId }
+                    val until = securityPrefs.getLong("lockout_until_$selectedId", 0L)
+                    if (member == null) {
+                        error = "Select an active staff account."
+                    } else if (now < until) {
+                        lockoutUntil = until
+                        error = "Too many incorrect PINs. Try again in ${(until - now + 999L) / 1000L} seconds."
+                    } else if (verifyPin(pin, member.pinSalt, member.pinHash)) {
+                        securityPrefs.edit().remove("failed_attempts_$selectedId").remove("lockout_until_$selectedId").apply()
+                        lockoutUntil = 0L
+                        pin = ""
+                        error = ""
+                        onLogin(member)
+                    } else {
+                        val attempts = securityPrefs.getInt("failed_attempts_$selectedId", 0) + 1
+                        securityPrefs.edit().putInt("failed_attempts_$selectedId", attempts).apply()
+                        if (attempts >= 5) {
+                            val exponent = (attempts - 5).coerceAtMost(5)
+                            val delayMs = (30_000L * (1L shl exponent)).coerceAtMost(15 * 60_000L)
+                            val newUntil = now + delayMs
+                            securityPrefs.edit().putLong("lockout_until_$selectedId", newUntil).apply()
+                            lockoutUntil = newUntil
+                            error = "Too many incorrect PINs. Login locked for ${delayMs / 1000L} seconds."
+                        } else {
+                            error = "Incorrect PIN. ${5 - attempts} attempts remain before a temporary lockout."
+                        }
+                        pin = ""
+                    }
+                }
+            },
+            enabled = selectedId.isNotBlank() && System.currentTimeMillis() >= lockoutUntil,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(if (System.currentTimeMillis() < lockoutUntil) "Login locked" else "Login") }
+        Text("Five failed attempts trigger a persistent, increasing lockout. Admin can reset the staff PIN.", color = Color(0xFF718078), style = MaterialTheme.typography.bodySmall)
     }
 }
 
