@@ -126,7 +126,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         require(countedCashPaise >= 0)
         val shift = getOpenCashShift() ?: error("No open cash shift.")
         val cashSales = cashSalesTotal(shift.id)
-        val expected = shift.openingFloatPaise + cashSales + cashInTotal(shift.id) - cashOutTotal(shift.id)
+        val expected = Math.subtractExact(Math.addExact(Math.addExact(shift.openingFloatPaise, cashSales), cashInTotal(shift.id)), cashOutTotal(shift.id))
         val closed = shift.copy(
             closedAt = closedAt,
             expectedCashPaise = expected,
@@ -419,6 +419,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         require(lines.all { line -> line.purchaseId == purchase.id && line.quantityBaseUnits > 0 && line.unitCostPaise >= 0 })
         require(lines.map { it.id }.distinct().size == lines.size && lines.map { it.lotId }.distinct().size == lines.size)
         require(lines.zip(lots).all { (line, lot) -> line.ingredientId == lot.ingredientId && lot.location == "STORE" && lot.remainingBaseUnits == line.quantityBaseUnits && lot.qtyBaseUnits == line.quantityBaseUnits && lot.id == line.lotId && lot.unitCostPaise == line.unitCostPaise })
+        require(lines.fold(0L) { total, line -> Math.addExact(total, line.totalCostPaise) } == purchase.totalPaise) { "Purchase total does not match its lines." }
         insertPurchase(purchase)
         lines.zip(lots).forEach { (line, lot) ->
             require(line.quantityBaseUnits > 0 && line.unitCostPaise >= 0)
