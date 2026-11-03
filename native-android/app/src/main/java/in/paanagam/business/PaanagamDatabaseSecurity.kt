@@ -72,7 +72,7 @@ internal object PaanagamDatabaseSecurity {
             }
         } else if (live.exists()) {
             try {
-                verifyEncryptedDatabase(live, key)
+                verifyEncryptedDatabase(live, key, checkIntegrity = false)
                 if (recovery.exists()) recovery.delete()
             } catch (failure: Throwable) {
                 if (recovery.exists()) {
@@ -180,17 +180,19 @@ internal object PaanagamDatabaseSecurity {
         verifyEncryptedDatabase(destination, key)
     }
 
-    private fun verifyEncryptedDatabase(file: File, key: ByteArray) {
+    private fun verifyEncryptedDatabase(file: File, key: ByteArray, checkIntegrity: Boolean = true) {
         require(file.isFile && file.length() > 0L) { "Encrypted database file is missing or empty." }
         val db = SQLiteDatabase.openDatabase(
             file.absolutePath, key, null, SQLiteDatabase.OPEN_READONLY, null
         )
         try {
             check(scalarInt(db, "PRAGMA cipher_status") == 1) { "SQLCipher encryption status check failed." }
-            val integrity = db.rawQuery("PRAGMA integrity_check", emptyArray<String>()).use {
-                if (it.moveToFirst()) it.getString(0) else ""
+            if (checkIntegrity) {
+                val integrity = db.rawQuery("PRAGMA integrity_check", emptyArray<String>()).use {
+                    if (it.moveToFirst()) it.getString(0) else ""
+                }
+                check(integrity.equals("ok", true)) { "Encrypted database failed integrity validation." }
             }
-            check(integrity.equals("ok", true)) { "Encrypted database failed integrity validation." }
             val version = scalarInt(db, "PRAGMA user_version")
             check(version in 1..27) { "Unexpected encrypted database schema version: $version." }
         } finally {
