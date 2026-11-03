@@ -25,8 +25,8 @@ fun KitchenKdsScreen(db: PaanagamDatabase) {
         allTickets.forEach { ticket -> loaded[ticket.saleId] = db.dao().saleLines(ticket.saleId) }
         linesBySale = loaded
     }
-    val active = allTickets.filter { it.status != "COMPLETED" }
-    val visible = if (showCompleted) allTickets.filter { it.status == "COMPLETED" } else active
+    val active = allTickets.filter { it.status !in setOf("COMPLETED", "CANCELLED") }
+    val visible = if (showCompleted) allTickets.filter { it.status in setOf("COMPLETED", "CANCELLED") } else active
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Kitchen display", style = MaterialTheme.typography.headlineSmall)
         Text("Live POS tickets • oldest orders first", style = MaterialTheme.typography.bodySmall)
