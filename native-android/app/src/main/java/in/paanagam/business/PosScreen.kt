@@ -33,6 +33,7 @@ private val PosMuted = Color(0xFF887766)
 fun PosScreen(db: PaanagamDatabase) {
     val catalog by db.dao().catalog().collectAsState(initial = emptyList())
     val sales by db.dao().sales().collectAsState(initial = emptyList())
+    val heldOrders by db.dao().heldOrders().collectAsState(initial = emptyList())
     val recipeLines by db.dao().allRecipeLines().collectAsState(initial = emptyList())
     val comboComponents by db.dao().allComboComponents().collectAsState(initial = emptyList())
     val activeShift by db.dao().activeCashShift().collectAsState(initial = null)
@@ -47,6 +48,7 @@ fun PosScreen(db: PaanagamDatabase) {
     var redeemFreeCoffee by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
+    var showHeldOrders by remember { mutableStateOf(false) }
     var showAddItem by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
     var newCategory by remember { mutableStateOf("Beverages") }
