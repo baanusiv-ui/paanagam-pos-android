@@ -25,7 +25,7 @@ interface PaanagamDao {
     @Update
     suspend fun updateCashShift(shift: CashShift)
     @Query("SELECT COALESCE(SUM(totalPaise), 0) FROM sales WHERE paymentMethod = 'CASH' AND status = 'COMPLETED' AND shiftId = :shiftId")
-    suspend fun cashSalesTotal(shiftId: String)
+    suspend fun cashSalesTotal(shiftId: String): Long
     @Transaction
     suspend fun openCashShift(shift: CashShift) {
         require(shift.openingFloatPaise >= 0)
