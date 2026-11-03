@@ -345,7 +345,7 @@ private fun canAccess(staff: StaffMember, module: String): Boolean {
     if (!staff.active) return false
     if (staff.role == "ADMIN") return true
     if (module in ADMIN_ONLY_MODULES) return false
-    val allowed = if (staff.allowedModules.isBlank()) defaultModules(staff.role) else staff.allowedModules.split("|").filter { it.isNotBlank() }.toSet()
+    val allowed = when { staff.allowedModules.isBlank() -> defaultModules(staff.role); staff.allowedModules == "NONE" -> emptySet(); else -> staff.allowedModules.split("|").filter { it.isNotBlank() }.toSet() }
     return module in allowed
 }
 
@@ -434,7 +434,7 @@ private fun StaffAdminScreen(db: PaanagamDatabase, current: StaffMember) {
                         TextButton(onClick = { scope.launch { if (pin.length !in 4..8) message = "Enter a 4–8 digit PIN above, then tap Reset." else { val c = pinCredentials(pin); db.dao().resetStaffPin(member.id, c.first, c.second); pin = ""; message = "PIN reset." } } }) { Text("Reset PIN") }
                         TextButton(onClick = {
                             editingPermissionsFor = member.id
-                            selectedModules = if (member.allowedModules.isBlank()) defaultModules(member.role) else member.allowedModules.split("|").filter { it.isNotBlank() }.toSet()
+                            selectedModules = when { member.allowedModules.isBlank() -> defaultModules(member.role); member.allowedModules == "NONE" -> emptySet(); else -> member.allowedModules.split("|").filter { it.isNotBlank() }.toSet() }
                         }) { Text("Module access") }
                         if (member.id != current.id && member.role != "ADMIN") {
                             if (member.active) TextButton(onClick = { scope.launch { db.dao().setStaffActive(member.id, false); message = "Account deactivated." } }) { Text("Deactivate") }
@@ -455,7 +455,7 @@ private fun StaffAdminScreen(db: PaanagamDatabase, current: StaffMember) {
                             TextButton(onClick = { selectedModules = defaultModules(member.role) }) { Text("Role defaults") }
                             TextButton(onClick = { selectedModules = emptySet() }) { Text("Clear all") }
                             Button(onClick = { scope.launch {
-                                runCatching { db.dao().updateStaff(member.copy(allowedModules = selectedModules.filterNot { it in ADMIN_ONLY_MODULES }.joinToString("|"))) }
+                                runCatching { db.dao().updateStaff(member.copy(allowedModules = selectedModules.filterNot { it in ADMIN_ONLY_MODULES }.takeIf { it.isNotEmpty() }?.joinToString("|") ?: "NONE")) }
                                     .onSuccess { message = "Module permissions saved for " + member.name; editingPermissionsFor = null }
                                     .onFailure { message = it.message ?: "Could not save permissions." }
                             } }) { Text("Save access") }
