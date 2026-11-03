@@ -32,7 +32,7 @@ fun KitchenKdsScreen(db: PaanagamDatabase) {
         Text("Live POS tickets • oldest orders first", style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = !showCompleted, onClick = { showCompleted = false }, label = { Text("Active (${active.size})") })
-            FilterChip(selected = showCompleted, onClick = { showCompleted = true }, label = { Text("Completed") })
+            FilterChip(selected = showCompleted, onClick = { showCompleted = true }, label = { Text("Completed / cancelled") })
         }
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.primary)
         if (visible.isEmpty()) Text(if (showCompleted) "No completed tickets yet." else "No active kitchen tickets.")
