@@ -46,7 +46,7 @@ fun SalesReconciliationScreen(db: PaanagamDatabase) {
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Daily settlement check", style = MaterialTheme.typography.titleLarge, color = Color(0xFF2B1B12), fontWeight = FontWeight.Bold)
-        Text("Compare completed POS bills with actual cash counted and UPI settlement received. Cash float is reconciled separately in Cash Shift.", color = Color(0xFF718078), style = MaterialTheme.typography.bodySmall)
+        Text("Compare completed POS bills with cash sales collected and UPI settlement received. Exclude the opening float here; reconcile the float separately in Cash Shift.", color = Color(0xFF718078), style = MaterialTheme.typography.bodySmall)
         Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -73,7 +73,7 @@ fun SalesReconciliationScreen(db: PaanagamDatabase) {
                 OutlinedTextField(
                     value = cashCounted,
                     onValueChange = { cashCounted = it.filter { ch -> ch.isDigit() || ch == '.' }.take(12) },
-                    label = { Text("Actual cash counted (₹)") },
+                    label = { Text("Cash from sales only (exclude float) ₹") },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true
