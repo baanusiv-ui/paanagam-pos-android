@@ -92,10 +92,17 @@ private val MIGRATION_7_8 = object : Migration(7, 8) {
     }
 }
 
+private val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS operational_records (id TEXT NOT NULL PRIMARY KEY, module TEXT NOT NULL, title TEXT NOT NULL, details TEXT NOT NULL, amountPaise INTEGER NOT NULL, status TEXT NOT NULL, createdAt INTEGER NOT NULL)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_operational_records_module_createdAt ON operational_records(module, createdAt)")
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).build()
+        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build()
         setContent { PaanagamApp(db) }
     }
 }
@@ -211,7 +218,7 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                         "WhatsApp Settings" -> WhatsAppSettingsScreen()
                         "Staff & HR" -> StaffAdminScreen(db, activeStaff!!)
                         "Reports", "Food Cost", "Finance & P&L" -> ReportsScreen(db, selected)
-                        else -> ModuleScreen(selected)
+                        else -> OperationalModuleScreen(db, selected)
                     }
                     }
                 }
