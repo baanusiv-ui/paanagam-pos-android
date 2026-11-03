@@ -11,6 +11,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import `in`.paanagam.business.data.PaanagamDatabase
 import `in`.paanagam.business.data.SaleLine
+import `in`.paanagam.business.data.StaffMember
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -21,7 +22,7 @@ private val HistoryIvory = Color(0xFFFFF4DF)
 private val HistoryPanel = Color(0xFF3A2519)
 
 @Composable
-fun SalesHistoryScreen(db: PaanagamDatabase) {
+fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
     val sales by db.dao().sales().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var expandedSaleId by remember { mutableStateOf<String?>(null) }
@@ -62,7 +63,7 @@ fun SalesHistoryScreen(db: PaanagamDatabase) {
                         val sale = target ?: return@TextButton
                         refundSaleId = null
                         scope.launch {
-                            runCatching { db.dao().refundCompletedSale(sale.id, refundReason, System.currentTimeMillis(), sale.cashPaidPaise, sale.upiPaidPaise) }
+                            runCatching { db.dao().refundCompletedSale(sale.id, refundReason, System.currentTimeMillis(), sale.cashPaidPaise, sale.upiPaidPaise, currentStaff.id, currentStaff.name) }
                                 .onSuccess { message = "Full refund recorded; stock and sale status reversed." }
                                 .onFailure { message = it.message ?: "Refund failed." }
                         }
