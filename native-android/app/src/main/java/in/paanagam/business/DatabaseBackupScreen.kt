@@ -129,6 +129,7 @@ fun DatabaseBackupScreen(db: PaanagamDatabase, onRecreate: () -> Unit) {
                 } catch (error: Throwable) {
                     message = error.message ?: "Backup could not be completed."
                 } finally {
+                    runCatching { db.close() }
                     onRecreate()
                 }
             }
