@@ -20,6 +20,7 @@ import java.util.UUID
  val catalog by db.dao().catalog().collectAsState(initial=emptyList())
  val sales by db.dao().sales().collectAsState(initial=emptyList())
  val recipeLines by db.dao().allRecipeLines().collectAsState(initial=emptyList())
+ val comboComponents by db.dao().allComboComponents().collectAsState(initial=emptyList())
  val scope=rememberCoroutineScope()
  var name by remember { mutableStateOf("") }; var category by remember { mutableStateOf("Beverages") }; var price by remember { mutableStateOf("") }
  var customerPhone by remember { mutableStateOf("") }; var loyaltyRewards by remember { mutableIntStateOf(0) }; var redeemFreeCoffee by remember { mutableStateOf(false) }; var cart by remember { mutableStateOf<Map<String,Pair<CatalogItem,Int>>>(emptyMap()) }; var payment by remember { mutableStateOf("CASH") }; var msg by remember { mutableStateOf("") }
@@ -29,7 +30,11 @@ import java.util.UUID
  }
  val coffeeItem = cart.values.map { it.first }.firstOrNull { it.name.contains("coffee", ignoreCase = true) }
  val total=cart.values.sumOf { it.first.pricePaise*it.second }
- val missingRecipes = cart.values.map { it.first }.filter { item -> recipeLines.none { it.menuItemId == item.id } }
+ val missingRecipes = cart.values.map { it.first }.filter { item ->
+  val parts = comboComponents.filter { it.comboItemId == item.id }
+  if (parts.isEmpty()) recipeLines.none { it.menuItemId == item.id }
+  else parts.any { part -> recipeLines.none { it.menuItemId == part.componentItemId } }
+ }
  Column(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(7.dp)) {
   Text("Menu setup",color=Color(0xFFDDB36C))
   Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
