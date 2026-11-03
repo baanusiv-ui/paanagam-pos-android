@@ -187,10 +187,16 @@ private val MIGRATION_20_21 = object : Migration(20, 21) {
     }
 }
 
+private val MIGRATION_21_22 = object : Migration(21, 22) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE staff_members ADD COLUMN allowedModules TEXT NOT NULL DEFAULT ''")
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21).build()
+        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22).build()
         setContent { PaanagamApp(db) { recreate() } }
     }
 }
@@ -286,9 +292,9 @@ private fun PaanagamApp(db: PaanagamDatabase, onRecreate: () -> Unit) {
                         }
                     }
                     activeStaff == null -> StaffLoginScreen(db) { activeStaff = it }
-                    !canAccess(activeStaff!!.role, selected) -> { selected = "Dashboard"; Text("Access restricted.", color = Color(0xFFC26A27)) }
+                    !canAccess(activeStaff!!, selected) -> { selected = "Dashboard"; Text("Access restricted.", color = Color(0xFFC26A27)) }
                     showMore -> {
-                    MoreModulesScreen(modules.filterNot { it in primaryTabs }.filter { canAccess(activeStaff!!.role, it) }) { module ->
+                    MoreModulesScreen(modules.filterNot { it in primaryTabs }.filter { canAccess(activeStaff!!, it) }) { module ->
                         selected = module
                         showMore = false
                     }
@@ -324,11 +330,23 @@ private fun PaanagamApp(db: PaanagamDatabase, onRecreate: () -> Unit) {
     }
 }
 
-private fun canAccess(role: String, module: String): Boolean = when (role) {
-    "ADMIN" -> true
-    "MANAGER" -> module !in listOf("Staff & HR", "WhatsApp Settings", "Business Planner", "Marketing Automation", "Automation Hub", "Data Backup")
-    "CASHIER" -> module in listOf("Dashboard", "POS", "Orders", "Sales History", "Cash Shift")
-    else -> false
+private val ADMIN_ONLY_MODULES = setOf("Staff & HR", "WhatsApp Settings", "Data Backup")
+private val MANAGER_DEFAULT_MODULES = modules.filterNot { it in ADMIN_ONLY_MODULES + setOf("Business Planner", "Marketing Automation", "Automation Hub") }.toSet()
+private val CASHIER_DEFAULT_MODULES = setOf("Dashboard", "POS", "Orders", "Sales History", "Cash Shift")
+
+private fun defaultModules(role: String): Set<String> = when (role) {
+    "ADMIN" -> modules.toSet()
+    "MANAGER" -> MANAGER_DEFAULT_MODULES
+    "CASHIER" -> CASHIER_DEFAULT_MODULES
+    else -> emptySet()
+}
+
+private fun canAccess(staff: StaffMember, module: String): Boolean {
+    if (!staff.active) return false
+    if (staff.role == "ADMIN") return true
+    if (module in ADMIN_ONLY_MODULES) return false
+    val allowed = if (staff.allowedModules.isBlank()) defaultModules(staff.role) else staff.allowedModules.split("|").filter { it.isNotBlank() }.toSet()
+    return module in allowed
 }
 
 private fun pinCredentials(pin: String): Pair<String, String> {
@@ -368,7 +386,8 @@ private fun AdminSetupScreen(onCreate: (String, String) -> Unit) {
 
 @Composable
 private fun StaffLoginScreen(db: PaanagamDatabase, onLogin: (StaffMember) -> Unit) {
-    val staff by db.dao().staffMembers().collectAsState(initial = emptyList())
+    val allStaff by db.dao().staffMembers().collectAsState(initial = emptyList())
+    val staff = allStaff.filter { it.active }
     var selectedId by remember { mutableStateOf("") }
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
@@ -396,9 +415,11 @@ private fun StaffAdminScreen(db: PaanagamDatabase, current: StaffMember) {
     var pin by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("CASHIER") }
     var message by remember { mutableStateOf("") }
+    var editingPermissionsFor by remember { mutableStateOf<String?>(null) }
+    var selectedModules by remember { mutableStateOf(setOf<String>()) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Staff access management", color = Gold, style = MaterialTheme.typography.titleLarge)
-        Text("Create accounts, reset PINs and deactivate access. PINs are salted PBKDF2 hashes stored locally.", color = Color(0xFF65736B))
+        Text("Android-only local login. Admin creates cashier and manager accounts, assigns a private PIN, controls module access and can reset or deactivate access. PINs are salted PBKDF2 hashes stored on this device.", color = Color(0xFF65736B))
         OutlinedTextField(name, { name = it }, label = { Text("Staff name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("Initial / reset PIN (4–8 digits)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         Row { FilterChip(selected = role == "CASHIER", onClick = { role = "CASHIER" }, label = { Text("Cashier") }); Spacer(Modifier.width(8.dp)); FilterChip(selected = role == "MANAGER", onClick = { role = "MANAGER" }, label = { Text("Manager") }) }
@@ -408,11 +429,36 @@ private fun StaffAdminScreen(db: PaanagamDatabase, current: StaffMember) {
             Card(colors = CardDefaults.cardColors(containerColor = White), shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.padding(12.dp)) {
                     Text(member.name + " • " + member.role, color = Ink, fontWeight = FontWeight.Bold)
+                    Text(if (member.active) "ACTIVE • Android device login" else "INACTIVE", color = if (member.active) Gold else Color.Gray, style = MaterialTheme.typography.labelSmall)
                     Row {
                         TextButton(onClick = { scope.launch { if (pin.length !in 4..8) message = "Enter a 4–8 digit PIN above, then tap Reset." else { val c = pinCredentials(pin); db.dao().resetStaffPin(member.id, c.first, c.second); pin = ""; message = "PIN reset." } } }) { Text("Reset PIN") }
-                        if (member.id != current.id) {
+                        TextButton(onClick = {
+                            editingPermissionsFor = member.id
+                            selectedModules = if (member.allowedModules.isBlank()) defaultModules(member.role) else member.allowedModules.split("|").filter { it.isNotBlank() }.toSet()
+                        }) { Text("Module access") }
+                        if (member.id != current.id && member.role != "ADMIN") {
                             if (member.active) TextButton(onClick = { scope.launch { db.dao().setStaffActive(member.id, false); message = "Account deactivated." } }) { Text("Deactivate") }
                             else TextButton(onClick = { scope.launch { db.dao().setStaffActive(member.id, true); message = "Account reactivated." } }) { Text("Reactivate") }
+                        }
+                    }
+                    if (editingPermissionsFor == member.id) {
+                        Divider()
+                        Text("Allowed modules for " + member.name, color = Gold, fontWeight = FontWeight.Bold)
+                        Text("Staff administration, WhatsApp settings and backup remain admin-only.", color = Color(0xFF65736B), style = MaterialTheme.typography.bodySmall)
+                        modules.filterNot { it in ADMIN_ONLY_MODULES }.forEach { module ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(checked = module in selectedModules, onCheckedChange = { checked -> selectedModules = if (checked) selectedModules + module else selectedModules - module })
+                                Text(module, color = Ink)
+                            }
+                        }
+                        Row {
+                            TextButton(onClick = { selectedModules = defaultModules(member.role) }) { Text("Role defaults") }
+                            TextButton(onClick = { selectedModules = emptySet() }) { Text("Clear all") }
+                            Button(onClick = { scope.launch {
+                                runCatching { db.dao().updateStaff(member.copy(allowedModules = selectedModules.filterNot { it in ADMIN_ONLY_MODULES }.joinToString("|"))) }
+                                    .onSuccess { message = "Module permissions saved for " + member.name; editingPermissionsFor = null }
+                                    .onFailure { message = it.message ?: "Could not save permissions." }
+                            } }) { Text("Save access") }
                         }
                     }
                 }
