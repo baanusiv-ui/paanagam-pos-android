@@ -107,3 +107,14 @@ data class Supplier(
     val active: Boolean = true,
     val createdAt: Long
 )
+
+@Entity(tableName = "next_day_plans")
+data class NextDayPlan(
+    @PrimaryKey val id: String,
+    val planDate: String,
+    val menuItemId: String,
+    val menuItemName: String,
+    val plannedQuantity: Int,
+    val status: String = "PLANNED",
+    val createdAt: Long
+)
