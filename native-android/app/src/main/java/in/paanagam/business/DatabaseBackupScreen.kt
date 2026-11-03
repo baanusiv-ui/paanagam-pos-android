@@ -55,7 +55,7 @@ private object PaanagamDatabaseBackup {
             output.use { PortableBackupCrypto.encrypt(portable.inputStream(), it, passphrase) }
         } finally {
             portable.delete()
-            passphrase.fill('\\u0000')
+            passphrase.fill('\u0000')
         }
     }
 
@@ -90,7 +90,7 @@ private object PaanagamDatabaseBackup {
         } finally {
             stagedPlain.delete()
             stagedEncrypted.delete()
-            passphrase.fill('\\u0000')
+            passphrase.fill('\u0000')
         }
     }
 }
