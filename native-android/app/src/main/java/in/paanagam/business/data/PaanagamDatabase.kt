@@ -202,6 +202,8 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     @Transaction
     suspend fun completeSale(sale: Sale, lines: List<SaleLine>) {
         require(lines.isNotEmpty()) { "Bill has no items" }
+        require(lines.all { it.saleId == sale.id && it.quantity > 0 && it.unitPricePaise >= 0 && it.lineTotalPaise == Math.multiplyExact(it.unitPricePaise, it.quantity.toLong()) }) { "Bill line totals are invalid." }
+        require(lines.sumOf { it.lineTotalPaise } == sale.totalPaise) { "Bill total does not match its line items." }
         val cashPortion = when (sale.paymentMethod) {
             "CASH" -> sale.totalPaise
             "UPI" -> 0L
