@@ -1,31 +1,32 @@
-# Paanagam POS for Android
+# Paanagam POS — Native Android
 
-Initial offline-first Android POS starter built with React, Vite and Capacitor. The interface is bundled inside the APK and does not need the live website to open.
+Paanagam (பானகம்) is being developed as a standalone Android application using Kotlin, Jetpack Compose and Room (SQLite). The native app lives in `native-android/`; it does not require Apper, React, Capacitor, a hosted website or a WebView to run.
 
-## Build the APK
+## Build and install
 
 1. Open the repository's **Actions** tab.
-2. Select **Build Android APK**.
-3. Tap **Run workflow** and select branch `main`.
-4. When the run completes successfully, open it and download the `paanagam-pos-debug-apk` artifact.
-5. Extract the ZIP and install `app-debug.apk` on your Android device. Android may ask you to allow installation from the app you use to open the file.
+2. Select **Build Native Android APK**.
+3. Run the workflow on the `main` branch, or push a change under `native-android/`.
+4. Download the `paanagam-native-debug-apk` artifact from a successful run.
+5. Extract `app-debug.apk` and install it on an Android device. Android may ask you to allow installation from the file manager or browser.
 
-The workflow also runs on pushes to relevant source files.
+The APK produced by this workflow is a **debug build**, not a signed production release.
 
-## Starter features
+## Native implementation
 
-- Local menu grid with sample Paanagam menu items
-- Cart quantity controls and totals
-- Cash/UPI payment method selection
-- Local sales history and daily totals
-- PIN-gated admin menu/price editor
-- JSON backup/restore
-- Basic manual loyalty-visit counter
+The app uses a local Room database and includes native screens and workflows for POS, sales history, menu/recipes, purchase entry, Store and Kitchen stock, FIFO transfers, production, wastage, stock reconciliation, suppliers, cash shifts, loyalty, staff access, reports, next-day planning, combos and Kitchen KDS.
 
-Default starter admin PIN: `1234`. Change it before use.
+Important rules:
+- Payments: Cash and UPI only. Paytm is excluded.
+- Store and Kitchen stock are maintained separately.
+- FIFO costing preserves each purchase lot's original cost; purchase costs are never averaged.
+- Coffee powder stock movement follows 250 g multiples.
+- POS recipe consumption is based on configured recipes and Kitchen stock.
+- Filter coffee reference: 250 g powder + 1,100 ml water yields 1,000 ml usable decoction (100 ml retained in grounds); one serving uses 25 ml decoction + 75 ml milk + 5 g sugar.
+- POS checkout must work offline and must not depend on WhatsApp or another external service.
 
-## Important limitations
+## Before live business use
 
-This starter is **not yet a complete migration** of the current Apper Paanagam POS and must not be treated as production-ready. It currently stores state in browser/WebView local storage, which can be cleared by Android/app data resets. Export backups regularly.
+This project is still under development. A successful APK build confirms compilation, not end-to-end business correctness. Device-level acceptance testing, backup/recovery validation, printer and UPI payment confirmation, and completion/verification of the remaining operational workflows are still required. Do not use a development APK as the sole production record until those checks are complete.
 
-Not yet implemented or verified: recipe-based inventory deduction, store/kitchen transfers, purchase entry, production batches, stock reconciliation, food-cost/pricing engine, printer integration, secure role management, SQLite-based resilient persistence, cloud backup/synchronization, and migration of the existing Apper database. The sample menu is placeholder data and should be replaced with the verified menu/prices.
+See [native-android/README.md](native-android/README.md) for implementation notes and known limitations.
