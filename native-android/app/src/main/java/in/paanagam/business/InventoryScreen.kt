@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.dp
 import `in`.paanagam.business.data.*
 import kotlinx.coroutines.launch
 import java.util.UUID
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 private val InvGold = Color(0xFFDDB36C)
 private val InvIvory = Color(0xFFFFF4DF)
@@ -87,12 +89,12 @@ fun InventoryScreen(db: PaanagamDatabase, mode: String) {
                     OutlinedTextField(kitchenMinimum, { kitchenMinimum = it }, label = { Text("Kitchen minimum (${ingredients.firstOrNull { it.id == selectedId }?.baseUnit ?: "unit"})") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
                     Button(onClick = {
                         val item = ingredients.firstOrNull { it.id == selectedId }
-                        val store = storeMinimum.toDoubleOrNull()
-                        val kitchen = kitchenMinimum.toDoubleOrNull()
-                        if (item == null || store == null || kitchen == null || store < 0 || kitchen < 0) message = "Enter valid minimum levels (zero disables an alert)"
+                        val store = runCatching { BigDecimal(storeMinimum).movePointRight(3).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
+                        val kitchen = runCatching { BigDecimal(kitchenMinimum).movePointRight(3).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
+                        if (item == null || store == null || kitchen == null || store < 0 || kitchen < 0) message = "Enter valid levels with up to 3 decimal places (zero disables an alert)"
                         else scope.launch {
                             runCatching {
-                                db.dao().updateIngredient(item.copy(storeMinStockBaseUnits = (store * 1000.0).toLong(), kitchenMinStockBaseUnits = (kitchen * 1000.0).toLong()))
+                                db.dao().updateIngredient(item.copy(storeMinStockBaseUnits = store, kitchenMinStockBaseUnits = kitchen))
                             }.onSuccess { message = "Minimum stock levels saved" }
                                 .onFailure { message = it.message ?: "Could not save minimum levels" }
                         }
@@ -131,15 +133,13 @@ fun InventoryScreen(db: PaanagamDatabase, mode: String) {
                         OutlinedTextField(cost, { cost = it }, label = { Text("Cost per base unit (₹)") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
                         Button(onClick = {
                             val item = ingredients.firstOrNull { it.id == selectedId }
-                            val q = qty.toDoubleOrNull()
-                            val c = cost.toDoubleOrNull()
-                            if (item == null || q == null || c == null || q <= 0 || c < 0) message = "Check ingredient, quantity and cost"
+                            val quantity = runCatching { BigDecimal(qty).movePointRight(3).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
+                            val unitCost = runCatching { BigDecimal(cost).movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValueExact() }.getOrNull()
+                            if (item == null || quantity == null || unitCost == null || quantity <= 0 || unitCost < 0) message = "Check quantity (up to 3 decimals) and cost"
                             else scope.launch {
                                 val purchaseId = UUID.randomUUID().toString()
                                 val lotId = UUID.randomUUID().toString()
-                                val quantity = (q * 1000.0).toLong()
-                                val unitCost = (c * 100.0).toLong()
-                                val total = quantity * unitCost / 1000L
+                                val total = Math.multiplyExact(quantity, unitCost) / 1000L
                                 val now = System.currentTimeMillis()
                                 val purchase = Purchase(purchaseId, supplier.trim(), invoice.trim(), now, total, supplierId = selectedSupplierId)
                                 val line = PurchaseLine(UUID.randomUUID().toString(), purchaseId, item.id, quantity, unitCost, total, lotId)
@@ -174,8 +174,8 @@ fun InventoryScreen(db: PaanagamDatabase, mode: String) {
                         OutlinedTextField(transferQty, { transferQty = it }, label = { Text("Transfer quantity in base units (decimals allowed)") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
                         Button(onClick = {
                             val item = ingredients.firstOrNull { it.id == selectedId }
-                            val q = transferQty.toDoubleOrNull()?.let { (it * 1000.0).toLong() }
-                            if (item == null || q == null || q <= 0) message = "Enter a valid transfer quantity"
+                            val q = runCatching { BigDecimal(transferQty).movePointRight(3).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
+                            if (item == null || q == null || q <= 0) message = "Enter a valid transfer quantity (up to 3 decimals)"
                             else scope.launch {
                                 val transfer = StockTransfer(UUID.randomUUID().toString(), from, if (from == "STORE") "KITCHEN" else "STORE", System.currentTimeMillis())
                                 runCatching { db.dao().transferFifo(transfer, item.id, q) }
