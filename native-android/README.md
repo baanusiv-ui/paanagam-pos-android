@@ -43,3 +43,13 @@ The current APK is a development build. Do not use it for live business transact
 - Coffee powder stock issue must follow 250 g multiples.
 - POS checkout must work independently of WhatsApp.
 - WhatsApp integration remains paused unless explicitly resumed by the user.
+
+
+## Staff access (build 0.1.3)
+
+- First launch creates the local Admin account with a 4–8 digit PIN.
+- Admin creates Manager and Cashier accounts and can reset PINs.
+- PINs are stored as salted PBKDF2-HMAC-SHA256 hashes (120,000 iterations), not plaintext.
+- Admin can deactivate and reactivate staff accounts.
+- Admin has full module access; Manager is restricted from staff administration and selected configuration modules; Cashier is limited to Dashboard, POS, Orders and Sales History.
+- Staff records are local to this device. There is no cloud account sync or remote recovery yet.
