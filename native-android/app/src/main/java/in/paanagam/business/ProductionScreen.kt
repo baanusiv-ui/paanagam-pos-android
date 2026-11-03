@@ -12,6 +12,8 @@ import androidx.compose.ui.unit.dp
 import `in`.paanagam.business.data.*
 import kotlinx.coroutines.launch
 import java.util.UUID
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 @Composable
 fun ProductionScreen(db: PaanagamDatabase) {
@@ -83,10 +85,10 @@ fun ProductionScreen(db: PaanagamDatabase) {
                 OutlinedTextField(wastageQty, { wastageQty = it }, label = { Text("Quantity (base units)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(reason, { reason = it }, label = { Text("Reason") }, modifier = Modifier.fillMaxWidth())
                 Button(onClick = {
-                    val q = wastageQty.toDoubleOrNull()
-                    if (wastageItem.isBlank() || q == null || q <= 0 || reason.isBlank()) message = "Enter item, quantity and reason"
+                    val quantity = runCatching { BigDecimal(wastageQty).movePointRight(3).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
+                    if (wastageItem.isBlank() || quantity == null || quantity <= 0 || reason.isBlank()) message = "Enter a valid quantity (up to 3 decimals) and reason"
                     else scope.launch {
-                        val record = WastageRecord(UUID.randomUUID().toString(), wastageItem, wastageLocation, (q * 1000.0).toLong(), reason.trim(), System.currentTimeMillis(), 0)
+                        val record = WastageRecord(UUID.randomUUID().toString(), wastageItem, wastageLocation, quantity, reason.trim(), System.currentTimeMillis(), 0)
                         runCatching { db.dao().saveWastage(record) }
                             .onSuccess { wastageQty = ""; reason = ""; message = "Wastage recorded and stock reduced using FIFO." }
                             .onFailure { message = it.message ?: "Wastage could not be recorded" }
