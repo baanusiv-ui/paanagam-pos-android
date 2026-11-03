@@ -10,7 +10,6 @@ import androidx.room.RoomDatabase
 import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
-import java.math.BigInteger
 
 @Dao
 interface PaanagamDao {
@@ -154,10 +153,8 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
             "Stock changed after the count was opened. Refresh the system balance and recount."
         }
         val variance = Math.subtractExact(record.physicalQtyBaseUnits, record.systemQtyBaseUnits)
-        if (item.isCoffeePowder && variance < 0) {
-            require(item.baseUnit == "g" && variance % 250000L == 0L) {
-                "Coffee powder stock reductions must be in 250 g multiples."
-            }
+        require(isCoffeePowderReductionAllowed(item.isCoffeePowder, item.baseUnit, variance)) {
+            "Coffee powder stock reductions must be in 250 g multiples."
         }
         require(variance == record.varianceBaseUnits)
         if (variance > 0) {
@@ -409,17 +406,17 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         val lots = fifoLots(ingredientId, location)
         require(lots.sumOf { it.remainingBaseUnits } >= quantity) { "Insufficient stock" }
         var left = quantity
-        var totalCostNumerator = BigInteger.ZERO
+        val lotTakes = mutableListOf<Pair<Long, Long>>()
         lots.forEach { lot ->
             if (left > 0) {
                 val take = minOf(left, lot.remainingBaseUnits)
                 updateLotBalance(lot.id, lot.remainingBaseUnits - take)
-                totalCostNumerator = totalCostNumerator.add(BigInteger.valueOf(take).multiply(BigInteger.valueOf(lot.unitCostPaise)))
+                lotTakes += take to lot.unitCostPaise
                 insertStockMovement(StockMovement(UUID.randomUUID().toString(), ingredientId, lot.id, movementType, location, "", take, lot.unitCostPaise, referenceId, at))
                 left -= take
             }
         }
-        return totalCostNumerator.divide(BigInteger.valueOf(1000L)).longValueExact()
+        return calculateFifoCostPaise(lotTakes)
     }
 
     @Transaction
