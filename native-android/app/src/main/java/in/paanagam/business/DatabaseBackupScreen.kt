@@ -144,7 +144,7 @@ fun DatabaseBackupScreen(db: PaanagamDatabase, databaseKey: ByteArray, onRecreat
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8E9))) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Security")
-                Text("Backup files use AES-256-GCM authenticated encryption with a key derived from your passphrase. The passphrase is not stored. The live on-device Room database remains unencrypted at this stage.")
+                Text("The live on-device Room database uses SQLCipher encryption. Its random database key is protected by Android Keystore AES-256-GCM and is not stored as plaintext. Portable backup files use a separate AES-256-GCM passphrase envelope so they can be restored on another device. Keep the backup passphrase separately; it is never stored by the app.")
             }
         }
         Button(
