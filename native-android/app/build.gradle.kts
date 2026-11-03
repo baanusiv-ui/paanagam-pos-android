@@ -11,8 +11,8 @@ android {
         applicationId = "in.paanagam.business"
         minSdk = 26
         targetSdk = 35
-        versionCode = 67
-        versionName = "0.2.6"
+        versionCode = 68
+        versionName = "0.2.7"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
