@@ -15,7 +15,7 @@ Run GitHub Actions workflow **Build Native Android APK**. The debug APK is uploa
 - Configurable Store and Kitchen minimum stock levels per ingredient. Dashboard low-stock count is calculated from live Room stock balances; zero disables that location's alert.
 - Purchase receipt into Store and FIFO transfer between Store and Kitchen.
 - Recipe/BOM lines use scaled decimal base units.
-- POS sale completion deducts configured recipe quantities from Kitchen stock atomically using FIFO lots. A sale with a missing recipe or insufficient configured stock is rejected without saving the bill.
+- POS sale completion deducts configured recipe quantities from Kitchen stock atomically using FIFO lots. Coffee powder is reserved for decoction production and is rejected as a direct POS recipe ingredient; coffee POS recipes must consume prepared decoction (plus milk, sugar and other configured ingredients). A sale with a missing recipe or insufficient configured stock is rejected without saving the bill.
 - Ingredient cost is saved per bill from the actual FIFO lots consumed. Sales History shows bill lines, ingredient cost and gross margin before other expenses.
 - Dashboard sales, bill count and stock-alert count are calculated from local database records.
 - Production and wastage workflows have initial local implementations, including recent wastage history and FIFO cost display; these still need broader validation.
@@ -40,7 +40,7 @@ The current APK is a development build. Do not use it for live business transact
 - Payments are Cash and UPI only; Paytm is excluded.
 - Stock is maintained separately in Store and Kitchen.
 - FIFO costing is mandatory. Old stock retains its original purchase cost; new stock uses its own lot cost. Never use average purchase costing.
-- Coffee powder stock issue must follow 250 g multiples.
+- Coffee powder is used as a production input for decoction, never consumed directly by POS sales. Production follows the 250 g powder + 1,100 ml water → 1,000 ml usable decoction SOP. POS consumes prepared decoction in recipe quantities; coffee powder stock transfers and wastage remain in 250 g multiples.
 - POS checkout must work independently of WhatsApp.
 - WhatsApp integration remains paused unless explicitly resumed by the user.
 
