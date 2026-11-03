@@ -218,7 +218,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     suspend fun completeSale(sale: Sale, lines: List<SaleLine>) {
         require(lines.isNotEmpty()) { "Bill has no items" }
         require(lines.all { it.saleId == sale.id && it.quantity > 0 && it.unitPricePaise >= 0 && it.lineTotalPaise == Math.multiplyExact(it.unitPricePaise, it.quantity.toLong()) }) { "Bill line totals are invalid." }
-        require(lines.sumOf { it.lineTotalPaise } == sale.totalPaise) { "Bill total does not match its line items." }
+        require(lines.fold(0L) { sum, line -> Math.addExact(sum, line.lineTotalPaise) } == sale.totalPaise) { "Bill total does not match its line items." }
         val cashPortion = when (sale.paymentMethod) {
             "CASH" -> sale.totalPaise
             "UPI" -> 0L
@@ -364,7 +364,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
             if (left > 0) {
                 val take = minOf(left, lot.remainingBaseUnits)
                 updateLotBalance(lot.id, lot.remainingBaseUnits - take)
-                totalCost += take * lot.unitCostPaise / 1000L
+                totalCost = Math.addExact(totalCost, Math.multiplyExact(take, lot.unitCostPaise) / 1000L)
                 insertStockMovement(StockMovement(UUID.randomUUID().toString(), ingredientId, lot.id, movementType, location, "", take, lot.unitCostPaise, referenceId, at))
                 left -= take
             }
