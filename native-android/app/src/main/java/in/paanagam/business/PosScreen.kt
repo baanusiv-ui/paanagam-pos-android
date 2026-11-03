@@ -329,10 +329,10 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                     newPrice = newPrice, onNewPrice = { newPrice = it },
                     newIsCoffee = newIsCoffee, onNewIsCoffee = { newIsCoffee = it },
                     onSaveNew = {
-                        val price = newPrice.toDoubleOrNull()
-                        if (newName.isBlank() || price == null || price <= 0) message = "Enter a menu item and a valid price."
+                        val pricePaise = runCatching { BigDecimal(newPrice).movePointRight(2).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
+                        if (newName.isBlank() || pricePaise == null || pricePaise <= 0) message = "Enter a menu item and a valid price with up to 2 decimals."
                         else scope.launch {
-                            db.dao().saveCatalogItem(CatalogItem(UUID.randomUUID().toString(), newName.trim(), newCategory.trim(), (price * 100).toLong()))
+                            db.dao().saveCatalogItem(CatalogItem(UUID.randomUUID().toString(), newName.trim(), newCategory.trim(), pricePaise, isCoffee = newIsCoffee))
                             newName = ""; newPrice = ""; showAddItem = false; message = "Menu item added."
                         }
                     }
