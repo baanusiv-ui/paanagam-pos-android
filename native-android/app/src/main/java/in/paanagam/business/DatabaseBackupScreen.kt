@@ -55,8 +55,12 @@ private object PaanagamDatabaseBackup {
         require(source.isFile && source.length() > 0L) { "Local database file was not found." }
         val output = context.contentResolver.openOutputStream(destination, "wt")
             ?: error("Could not open the selected backup destination.")
-        FileInputStream(source).use { input ->
-            output.use { PortableBackupCrypto.encrypt(input, it, passphrase) }
+        try {
+            FileInputStream(source).use { input ->
+                output.use { PortableBackupCrypto.encrypt(input, it, passphrase) }
+            }
+        } finally {
+            passphrase.fill('\\u0000')
         }
     }
 
