@@ -180,10 +180,17 @@ private val MIGRATION_19_20 = object : Migration(19, 20) {
     }
 }
 
+
+private val MIGRATION_20_21 = object : Migration(20, 21) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS sales_reconciliations (id TEXT NOT NULL PRIMARY KEY, businessDate TEXT NOT NULL, posCashPaise INTEGER NOT NULL, posUpiPaise INTEGER NOT NULL, settledUpiPaise INTEGER NOT NULL, countedCashPaise INTEGER NOT NULL, note TEXT NOT NULL, reconciledAt INTEGER NOT NULL)")
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20).build()
+        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21).build()
         setContent { PaanagamApp(db) }
     }
 }
@@ -301,6 +308,7 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                         "Reports", "Food Cost", "Finance & P&L" -> ReportsScreen(db, selected)
                         "Customers" -> LoyaltyScreen(db)
                         "Stock Reconciliation" -> StockReconciliationScreen(db)
+                        "Sales Reconciliation" -> SalesReconciliationScreen(db)
                         "Cash Shift" -> CashShiftScreen(db)
                         "Suppliers" -> SuppliersScreen(db)
                         "Next-Day Planning" -> NextDayPlanningScreen(db)
@@ -318,7 +326,7 @@ private fun PaanagamApp(db: PaanagamDatabase) {
 private fun canAccess(role: String, module: String): Boolean = when (role) {
     "ADMIN" -> true
     "MANAGER" -> module !in listOf("Staff & HR", "WhatsApp Settings", "Business Planner", "Marketing Automation", "Automation Hub")
-    "CASHIER" -> module in listOf("Dashboard", "POS", "Orders", "Sales History")
+    "CASHIER" -> module in listOf("Dashboard", "POS", "Orders", "Sales History", "Cash Shift")
     else -> false
 }
 
