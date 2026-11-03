@@ -12,6 +12,19 @@ import java.util.UUID
 
 @Dao
 interface PaanagamDao {
+    @Query("SELECT * FROM staff_members WHERE active = 1 ORDER BY name")
+    fun staffMembers(): Flow<List<StaffMember>>
+    @Query("SELECT * FROM staff_members WHERE active = 1 ORDER BY createdAt LIMIT 1")
+    suspend fun firstActiveStaff(): StaffMember?
+    @Query("SELECT * FROM staff_members WHERE id = :id")
+    suspend fun staffById(id: String): StaffMember?
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertStaff(member: StaffMember)
+    @Query("UPDATE staff_members SET pinSalt = :salt, pinHash = :hash WHERE id = :id")
+    suspend fun resetStaffPin(id: String, salt: String, hash: String)
+    @Query("UPDATE staff_members SET active = :active WHERE id = :id")
+    suspend fun setStaffActive(id: String, active: Boolean)
+
     @Query("SELECT * FROM catalog_items WHERE active = 1 ORDER BY category, name")
     fun catalog(): Flow<List<CatalogItem>>
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -189,7 +202,7 @@ interface PaanagamDao {
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class], version = 7, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class], version = 8, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
