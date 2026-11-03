@@ -104,7 +104,7 @@ internal object PaanagamDatabaseSecurity {
             val version = scalarInt(db, "PRAGMA user_version")
             db.execSQL("ATTACH DATABASE ? AS portable KEY ''", arrayOf(destination.absolutePath))
             try {
-                db.rawQuery("SELECT sqlcipher_export('portable')", null).use { cursor ->
+                db.rawQuery("SELECT sqlcipher_export('portable')", emptyArray<String>()).use { cursor ->
                     check(cursor.moveToFirst()) { "Could not export the portable backup." }
                 }
                 db.execSQL("PRAGMA portable.user_version = $version")
@@ -130,16 +130,16 @@ internal object PaanagamDatabaseSecurity {
             file.absolutePath, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY
         )
         try {
-            val integrity = db.rawQuery("PRAGMA integrity_check", null).use {
+            val integrity = db.rawQuery("PRAGMA integrity_check", emptyArray<String>()).use {
                 if (it.moveToFirst()) it.getString(0) else ""
             }
             require(integrity.equals("ok", true)) { "Backup failed SQLite integrity validation." }
-            val version = db.rawQuery("PRAGMA user_version", null).use {
+            val version = db.rawQuery("PRAGMA user_version", emptyArray<String>()).use {
                 if (it.moveToFirst()) it.getInt(0) else 0
             }
             require(version in 1..27) { "Unsupported Paanagam database version: $version." }
             val tables = mutableSetOf<String>()
-            db.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", null).use { cursor ->
+            db.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", emptyArray<String>()).use { cursor ->
                 while (cursor.moveToNext()) tables.add(cursor.getString(0))
             }
             require(setOf("room_master_table", "ingredients", "sales", "stock_lots").all { it in tables }) {
@@ -156,7 +156,7 @@ internal object PaanagamDatabaseSecurity {
             source.absolutePath, null, SQLiteDatabase.OPEN_READWRITE, null
         )
         try {
-            plain.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use { cursor ->
+            plain.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", emptyArray<String>()).use { cursor ->
                 if (cursor.moveToFirst()) check(cursor.getInt(0) == 0) { "Database is busy; retry encryption after closing active operations." }
             }
             val version = scalarInt(plain, "PRAGMA user_version")
@@ -164,7 +164,7 @@ internal object PaanagamDatabaseSecurity {
             val keyText = String(key, StandardCharsets.US_ASCII)
             plain.execSQL("ATTACH DATABASE ? AS encrypted KEY ?", arrayOf(destination.absolutePath, keyText))
             try {
-                plain.rawQuery("SELECT sqlcipher_export('encrypted')", null).use { cursor ->
+                plain.rawQuery("SELECT sqlcipher_export('encrypted')", emptyArray<String>()).use { cursor ->
                     check(cursor.moveToFirst()) { "SQLCipher could not copy the database." }
                 }
                 plain.execSQL("PRAGMA encrypted.user_version = $version")
@@ -187,7 +187,7 @@ internal object PaanagamDatabaseSecurity {
         )
         try {
             check(scalarInt(db, "PRAGMA cipher_status") == 1) { "SQLCipher encryption status check failed." }
-            val integrity = db.rawQuery("PRAGMA integrity_check", null).use {
+            val integrity = db.rawQuery("PRAGMA integrity_check", emptyArray<String>()).use {
                 if (it.moveToFirst()) it.getString(0) else ""
             }
             check(integrity.equals("ok", true)) { "Encrypted database failed integrity validation." }
@@ -199,7 +199,7 @@ internal object PaanagamDatabaseSecurity {
     }
 
     private fun scalarInt(db: SQLiteDatabase, sql: String): Int =
-        db.rawQuery(sql, null).use { cursor ->
+        db.rawQuery(sql, emptyArray<String>()).use { cursor ->
             check(cursor.moveToFirst()) { "Database did not return a result for $sql" }
             cursor.getInt(0)
         }
