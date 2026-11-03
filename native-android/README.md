@@ -81,3 +81,14 @@ The current APK is a development build. Do not use it for live business transact
 - Room migration 23 → 24 creates the cash-movement ledger without deleting existing shift or sales data.
 
 Remaining audit items requiring additional work/device verification: auditable sale cancellation/refund with stock and payment reversals; fully configurable tax; real printer/UPI QR integrations; full operating-expense accounting; automated tests for FIFO rounding and all migrations; encrypted database and backup recovery; complete business workflows for placeholder operational modules. The app remains a local single-device POS; no multi-device sync is claimed.
+
+
+## 360° CCTV and POS cancellation audit
+
+- Added an administrator-only native CCTV screen with RTSP live playback using Android Media3.
+- Added pinch/drag and on-screen digital zoom controls (up to 5×) for the live preview.
+- Camera host, RTSP path, username and password are stored as AES-GCM ciphertext using an Android Keystore key; camera credentials are not stored in Room or printed to logs.
+- Added Room schema 27 and a cancellation/refund audit event table. The refund transaction writes its CCTV timestamp bookmark, bill ID, refund reason, amount and signed-in staff identity atomically with the existing stock/payment refund reversal.
+- Added local-network permissions and restricted the CCTV module to Admin.
+- Device dependency: generic RTSP is a video transport, not a universal record/clip-control API. This build creates a durable local timestamp bookmark; automatic camera-side clip retrieval/recording trigger and ONVIF PTZ/fisheye dewarping require the selected camera/NVR's supported ONVIF recording profile or vendor API. Verify the exact model before enabling that claim in production.
+- The new viewer and audit log still require Android build verification and physical camera testing. Do not treat this feature as production CCTV evidence until a real camera stream and clip retrieval are validated.
