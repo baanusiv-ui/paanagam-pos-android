@@ -1,5 +1,6 @@
 package `in`.paanagam.business.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -35,7 +36,7 @@ data class ProductionInput(@PrimaryKey val id: String, val batchId: String, val 
 data class WastageRecord(@PrimaryKey val id: String, val ingredientId: String, val location: String, val quantityBaseUnits: Long, val reason: String, val recordedAt: Long, val costPaise: Long)
 
 @Entity(tableName = "sales")
-data class Sale(@PrimaryKey val id: String, val createdAt: Long, val totalPaise: Long, val paymentMethod: String, val status: String = "COMPLETED", val syncState: String = "LOCAL", val customerPhone: String = "", val shiftId: String? = null)
+data class Sale(@PrimaryKey val id: String, val createdAt: Long, val totalPaise: Long, val paymentMethod: String, val status: String = "COMPLETED", val syncState: String = "LOCAL", val customerPhone: String = "", val shiftId: String? = null, @ColumnInfo(defaultValue = "0") val cashPaidPaise: Long = 0L, @ColumnInfo(defaultValue = "0") val upiPaidPaise: Long = 0L)
 
 @Entity(tableName = "sop_documents")
 data class SopDocument(@PrimaryKey val id: String, val title: String, val category: String, val version: Int, val status: String, val instructions: String, val updatedAt: Long)
