@@ -122,3 +122,6 @@ data class NextDayPlan(
 
 @Entity(tableName = "combo_components", indices = [Index(value = ["comboItemId"]), Index(value = ["componentItemId"])])
 data class ComboComponent(@PrimaryKey val id: String, val comboItemId: String, val componentItemId: String, val componentName: String, val quantity: Int)
+
+@Entity(tableName = "kitchen_tickets", indices = [Index(value = ["status"]), Index(value = ["createdAt"])])
+data class KitchenTicket(@PrimaryKey val saleId: String, val status: String = "NEW", val createdAt: Long, val updatedAt: Long)
