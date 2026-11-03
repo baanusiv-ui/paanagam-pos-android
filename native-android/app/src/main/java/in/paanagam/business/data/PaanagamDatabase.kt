@@ -180,6 +180,11 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     suspend fun loyaltyAccount(phone: String): LoyaltyAccount?
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveLoyaltyAccount(account: LoyaltyAccount)
+    @Query("SELECT * FROM device_binding WHERE id = 1")
+    suspend fun deviceBinding(): DeviceBinding?
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveDeviceBinding(binding: DeviceBinding)
+
     @Query("SELECT * FROM staff_members ORDER BY active DESC, name")
     fun staffMembers(): Flow<List<StaffMember>>
     @Query("SELECT * FROM staff_members WHERE active = 1 ORDER BY createdAt LIMIT 1")
@@ -492,7 +497,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, CashMovement::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class, HeldOrder::class, HeldOrderLine::class, SalesReconciliation::class, SaleRefund::class], version = 25, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, CashMovement::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class, HeldOrder::class, HeldOrderLine::class, SalesReconciliation::class, SaleRefund::class, DeviceBinding::class], version = 26, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
