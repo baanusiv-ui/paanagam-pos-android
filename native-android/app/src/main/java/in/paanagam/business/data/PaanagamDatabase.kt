@@ -149,15 +149,15 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         require(record.ingredientId == item.id) { "Reconciliation ingredient does not match the selected ingredient." }
         require(record.physicalQtyBaseUnits >= 0 && record.systemQtyBaseUnits >= 0)
         require(record.adjustmentCostPaise >= 0)
-        if (item.isCoffeePowder) {
-            require(item.baseUnit == "g" && record.physicalQtyBaseUnits % 250000L == 0L) {
-                "Coffee powder physical counts must be in 250 g multiples."
-            }
-        }
         require(stockBalance(item.id, record.location) == record.systemQtyBaseUnits) {
             "Stock changed after the count was opened. Refresh the system balance and recount."
         }
         val variance = Math.subtractExact(record.physicalQtyBaseUnits, record.systemQtyBaseUnits)
+        if (item.isCoffeePowder && variance < 0) {
+            require(item.baseUnit == "g" && variance % 250000L == 0L) {
+                "Coffee powder stock reductions must be in 250 g multiples."
+            }
+        }
         require(variance == record.varianceBaseUnits)
         if (variance > 0) {
             val lot = StockLot(UUID.randomUUID().toString(), item.id, record.location, record.reconciledAt, variance, variance, item.baseUnit, record.adjustmentCostPaise)
