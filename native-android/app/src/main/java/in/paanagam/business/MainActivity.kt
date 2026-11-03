@@ -95,7 +95,6 @@ private val MIGRATION_7_8 = object : Migration(7, 8) {
 private val MIGRATION_8_9 = object : Migration(8, 9) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("CREATE TABLE IF NOT EXISTS operational_records (id TEXT NOT NULL PRIMARY KEY, module TEXT NOT NULL, title TEXT NOT NULL, details TEXT NOT NULL, amountPaise INTEGER NOT NULL, status TEXT NOT NULL, createdAt INTEGER NOT NULL)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS index_operational_records_module_createdAt ON operational_records(module, createdAt)")
     }
 }
 
