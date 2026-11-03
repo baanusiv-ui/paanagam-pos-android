@@ -192,7 +192,7 @@ fun CctvScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
         }
 
         Text("Cancellation / refund evidence bookmarks", color = CctvInk, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text("A local audit bookmark is created automatically when an administrator or cashier records a completed-sale refund. It stores the transaction and exact camera time for footage review.", color = Color(0xFF718078), style = MaterialTheme.typography.bodySmall)
+        Text("A local audit bookmark is created when a cashier removes a cart item, cancels a pre-checkout cart, or records a completed-sale refund. It stores the cashier, reason, amount and exact camera time for footage review.", color = Color(0xFF718078), style = MaterialTheme.typography.bodySmall)
         if (events.isEmpty()) {
             Text("No cancellation or refund events yet.", color = Color(0xFF718078))
         } else {
