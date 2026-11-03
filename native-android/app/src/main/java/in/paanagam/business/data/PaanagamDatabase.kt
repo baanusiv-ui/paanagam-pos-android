@@ -12,6 +12,13 @@ import java.util.UUID
 
 @Dao
 interface PaanagamDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertOperationalRecord(record: OperationalRecord)
+    @Query("SELECT * FROM operational_records WHERE module = :module ORDER BY createdAt DESC")
+    fun operationalRecords(module: String): Flow<List<OperationalRecord>>
+    @Query("SELECT * FROM operational_records ORDER BY createdAt DESC")
+    fun allOperationalRecords(): Flow<List<OperationalRecord>>
+
     @Query("SELECT * FROM staff_members ORDER BY active DESC, name")
     fun staffMembers(): Flow<List<StaffMember>>
     @Query("SELECT * FROM staff_members WHERE active = 1 ORDER BY createdAt LIMIT 1")
@@ -204,7 +211,7 @@ interface PaanagamDao {
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class], version = 8, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class], version = 9, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
