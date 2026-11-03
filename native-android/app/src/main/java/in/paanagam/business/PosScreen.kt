@@ -95,6 +95,8 @@ fun PosScreen(db: PaanagamDatabase) {
                     onAdd = { item -> cart = cart + (item.id to (item to ((cart[item.id]?.second ?: 0) + 1))) },
                     showAddItem = showAddItem,
                     onToggleAdd = { showAddItem = !showAddItem },
+                    heldCount = heldOrders.size,
+                    onShowHeld = { showHeldOrders = true },
                     newName = newName, onNewName = { newName = it },
                     newCategory = newCategory, onNewCategory = { newCategory = it },
                     newPrice = newPrice, onNewPrice = { newPrice = it },
@@ -256,6 +258,8 @@ private fun PosMenuPanel(
     onAdd: (CatalogItem) -> Unit,
     showAddItem: Boolean,
     onToggleAdd: () -> Unit,
+    heldCount: Int,
+    onShowHeld: () -> Unit,
     newName: String,
     onNewName: (String) -> Unit,
     newCategory: String,
@@ -272,6 +276,7 @@ private fun PosMenuPanel(
             }
             Text("OFFLINE READY", color = PosBrown, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
                 modifier = Modifier.background(Color(0xFFF3E6C9), RoundedCornerShape(20.dp)).padding(horizontal = 10.dp, vertical = 7.dp))
+            TextButton(onClick = onShowHeld) { Text("Held $heldCount", color = PosOrange) }
             Spacer(Modifier.width(6.dp))
             TextButton(onClick = onToggleAdd) { Text(if (showAddItem) "Close" else "+ Menu item", color = PosBrown) }
         }
