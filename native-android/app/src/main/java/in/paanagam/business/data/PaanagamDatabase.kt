@@ -14,6 +14,31 @@ import java.util.UUID
 @Dao
 interface PaanagamDao {
 
+    @Query("SELECT * FROM held_orders ORDER BY createdAt DESC")
+    fun heldOrders(): Flow<List<HeldOrder>>
+    @Query("SELECT * FROM held_order_lines WHERE orderId = :orderId")
+    suspend fun heldOrderLines(orderId: String): List<HeldOrderLine>
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertHeldOrder(order: HeldOrder)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertHeldOrderLines(lines: List<HeldOrderLine>)
+    @Query("DELETE FROM held_order_lines WHERE orderId = :orderId")
+    suspend fun deleteHeldOrderLines(orderId: String)
+    @Query("DELETE FROM held_orders WHERE id = :orderId")
+    suspend fun deleteHeldOrderRow(orderId: String)
+    @Transaction
+    suspend fun saveHeldOrder(order: HeldOrder, lines: List<HeldOrderLine>) {
+        require(lines.isNotEmpty() && lines.all { it.orderId == order.id && it.quantity > 0 })
+        insertHeldOrder(order)
+        insertHeldOrderLines(lines)
+    }
+    @Transaction
+    suspend fun removeHeldOrder(orderId: String) {
+        deleteHeldOrderLines(orderId)
+        deleteHeldOrderRow(orderId)
+    }
+
+
     @Query("SELECT * FROM kitchen_tickets ORDER BY createdAt ASC")
 fun kitchenTickets(): Flow<List<KitchenTicket>>
 @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -364,7 +389,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class], version = 18, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class, HeldOrder::class, HeldOrderLine::class], version = 19, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
