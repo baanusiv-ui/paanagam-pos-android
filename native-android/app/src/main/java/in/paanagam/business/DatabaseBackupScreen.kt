@@ -52,7 +52,7 @@ private object PaanagamDatabaseBackup {
             PaanagamDatabaseSecurity.exportPlaintextForBackup(context, databaseKey, portable)
             val output = context.contentResolver.openOutputStream(destination, "wt")
                 ?: error("Could not open the selected backup destination.")
-            output.use { PortableBackupCrypto.encrypt(portable.inputStream(), it, passphrase) }
+            portable.inputStream().use { input -> output.use { PortableBackupCrypto.encrypt(input, it, passphrase) } }
         } finally {
             portable.delete()
             passphrase.fill('\u0000')
