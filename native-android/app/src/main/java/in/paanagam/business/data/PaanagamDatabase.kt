@@ -347,6 +347,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         }
         insertSaleRefund(SaleRefund(UUID.randomUUID().toString(), saleId, refundedAt, sale.totalPaise, cashRefundPaise, upiRefundPaise, reason.trim()))
         updateSaleStatus(saleId, "REFUNDED")
+        updateKitchenTicketStatus(saleId, "CANCELLED", refundedAt)
     }
     @Query("SELECT * FROM sales ORDER BY createdAt DESC")
     fun sales(): Flow<List<Sale>>
