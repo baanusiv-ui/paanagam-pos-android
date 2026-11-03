@@ -42,6 +42,7 @@ fun StockReconciliationScreen(db: PaanagamDatabase) {
     val countedBase = runCatching { BigDecimal(physical).movePointRight(3).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
     val variance = if (countedBase != null) countedBase - systemQty else 0L
     val fmt = remember { SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()) }
+    val coffeeAdjustmentValid = item?.isCoffeePowder != true || variance >= 0 || (item.baseUnit == "g" && variance % 250000L == 0L)
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(9.dp)) {
         Text("Physical stock count", color = Color(0xFF263A32), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -71,7 +72,6 @@ fun StockReconciliationScreen(db: PaanagamDatabase) {
                     }
                     OutlinedTextField(note, { note = it }, label = { Text("Reason / count reference") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
                     val adjustmentCost = runCatching { BigDecimal(unitCost).movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValueExact() }.getOrNull()
-                    val coffeeAdjustmentValid = item?.isCoffeePowder != true || variance >= 0 || (item.baseUnit == "g" && variance % 250000L == 0L)
                     Button(
                         enabled = item != null && countedBase != null && countedBase >= 0 && coffeeAdjustmentValid && (variance <= 0 || (adjustmentCost != null && adjustmentCost >= 0)),
                         onClick = {
