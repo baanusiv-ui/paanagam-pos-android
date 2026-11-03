@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.dp
 import `in`.paanagam.business.data.*
 import kotlinx.coroutines.launch
 import java.util.UUID
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 private val PosWalnut = Color(0xFF3A2519)
 private val PosBrown = Color(0xFF593923)
@@ -70,11 +72,11 @@ fun PosScreen(db: PaanagamDatabase) {
         }
     }
     val cartItems = cart.values.toList()
-    val total = cartItems.sumOf { it.first.pricePaise * it.second }
+    val total = cartItems.fold(0L) { sum, line -> Math.addExact(sum, Math.multiplyExact(line.first.pricePaise, line.second.toLong())) }
     val cashPartPaise = when (payment) {
         "CASH" -> total
         "UPI" -> 0L
-        else -> ((cashPartInput.toDoubleOrNull() ?: 0.0) * 100).toLong()
+        else -> runCatching { BigDecimal(cashPartInput).movePointRight(2).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrDefault(-1L)
     }
     val upiPartPaise = total - cashPartPaise
     val itemCount = cartItems.sumOf { it.second }
@@ -152,10 +154,10 @@ fun PosScreen(db: PaanagamDatabase) {
                     newPrice = newPrice, onNewPrice = { newPrice = it },
                     newIsCoffee = newIsCoffee, onNewIsCoffee = { newIsCoffee = it },
                     onSaveNew = {
-                        val price = newPrice.toDoubleOrNull()
-                        if (newName.isBlank() || price == null || price <= 0) message = "Enter a menu item and a valid price."
+                        val pricePaise = runCatching { BigDecimal(newPrice).movePointRight(2).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
+                        if (newName.isBlank() || pricePaise == null || pricePaise <= 0) message = "Enter a menu item and a valid price with up to 2 decimals."
                         else scope.launch {
-                            db.dao().saveCatalogItem(CatalogItem(UUID.randomUUID().toString(), newName.trim(), newCategory.trim(), (price * 100).toLong(), isCoffee = newIsCoffee))
+                            db.dao().saveCatalogItem(CatalogItem(UUID.randomUUID().toString(), newName.trim(), newCategory.trim(), pricePaise, isCoffee = newIsCoffee))
                             newName = ""; newPrice = ""; newIsCoffee = false; showAddItem = false; message = "Menu item added."
                         }
                     }
