@@ -24,8 +24,8 @@ interface PaanagamDao {
     suspend fun insertCashShift(shift: CashShift)
     @Update
     suspend fun updateCashShift(shift: CashShift)
-    @Query("SELECT COALESCE(SUM(totalPaise), 0) FROM sales WHERE paymentMethod = 'CASH' AND status = 'COMPLETED' AND createdAt >= :from AND createdAt <= :to")
-    suspend fun cashSalesTotal(from: Long, to: Long): Long
+    @Query("SELECT COALESCE(SUM(totalPaise), 0) FROM sales WHERE paymentMethod = 'CASH' AND status = 'COMPLETED' AND shiftId = :shiftId")
+    suspend fun cashSalesTotal(shiftId: String)
     @Transaction
     suspend fun openCashShift(shift: CashShift) {
         require(shift.openingFloatPaise >= 0)
@@ -36,7 +36,7 @@ interface PaanagamDao {
     suspend fun closeCashShift(countedCashPaise: Long, notes: String, closedAt: Long): CashShift {
         require(countedCashPaise >= 0)
         val shift = getOpenCashShift() ?: error("No open cash shift.")
-        val cashSales = cashSalesTotal(shift.openedAt, closedAt)
+        val cashSales = cashSalesTotal(shift.id)
         val expected = shift.openingFloatPaise + cashSales
         val closed = shift.copy(
             closedAt = closedAt,
@@ -124,6 +124,9 @@ interface PaanagamDao {
     @Transaction
     suspend fun completeSale(sale: Sale, lines: List<SaleLine>) {
         require(lines.isNotEmpty()) { "Bill has no items" }
+        val activeShift = getOpenCashShift()
+        require(sale.paymentMethod != "CASH" || activeShift != null) { "Open a cash shift before accepting cash payments." }
+        val saleWithShift = sale.copy(shiftId = activeShift?.id)
         val rewardLines = lines.filter { it.itemName.contains("coffee", ignoreCase = true) && it.unitPricePaise == 0L }
         require(rewardLines.size <= 1 && rewardLines.all { it.quantity == 1 }) { "Only one free coffee can be redeemed per bill." }
         val loyaltyBefore = if (rewardLines.isNotEmpty()) {
@@ -142,7 +145,7 @@ interface PaanagamDao {
                     consumeFifo(recipe.ingredientId, "KITCHEN", required, sale.id, "SALE_CONSUMPTION", sale.createdAt))
             }
         }
-        recordSale(sale)
+        recordSale(saleWithShift)
         saveSaleCost(SaleCost(sale.id, totalIngredientCost))
         recordSaleLines(lines)
         val paidCoffeeCount = lines.filter { it.itemName.contains("coffee", ignoreCase = true) && it.unitPricePaise > 0L }.sumOf { it.quantity }
