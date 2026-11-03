@@ -77,7 +77,6 @@ private object PaanagamDatabaseBackup {
                 if (previous.exists()) previous.renameTo(liveFile)
                 error("Could not install the restored database. The original database was preserved.")
             }
-            previous.delete()
         } catch (error: Throwable) {
             staged.delete()
             if (!liveFile.exists() && previous.exists()) previous.renameTo(liveFile)
