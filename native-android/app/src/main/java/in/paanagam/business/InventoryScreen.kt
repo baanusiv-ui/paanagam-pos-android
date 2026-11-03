@@ -25,6 +25,7 @@ private val InvPanel = Color(0xFF3A2519)
 fun InventoryScreen(db: PaanagamDatabase, mode: String) {
     val ingredients by db.dao().ingredients().collectAsState(initial = emptyList())
     val suppliers by db.dao().suppliers().collectAsState(initial = emptyList())
+    val stockMovements by db.dao().stockMovements().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var unit by remember { mutableStateOf("g") }
@@ -49,7 +50,7 @@ fun InventoryScreen(db: PaanagamDatabase, mode: String) {
         }
     }
 
-    LaunchedEffect(ingredients) {
+    LaunchedEffect(ingredients, stockMovements) {
         val values = mutableMapOf<String, Pair<Long, Long>>()
         ingredients.forEach { item -> values[item.id] = Pair(db.dao().stockBalance(item.id, "STORE"), db.dao().stockBalance(item.id, "KITCHEN")) }
         balances = values
