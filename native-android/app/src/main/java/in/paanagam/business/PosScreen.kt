@@ -338,6 +338,7 @@ private fun PosCartPanel(
     onIncrease: (String, CatalogItem, Int) -> Unit,
     onRemove: (String) -> Unit,
     onClear: () -> Unit,
+    onHold: () -> Unit,
     onCheckout: () -> Unit
 ) {
     Card(
@@ -422,7 +423,8 @@ private fun PosCartPanel(
                 Text("₹${"%.2f".format(total / 100.0)}", color = PosMustard, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onClear, enabled = cart.isNotEmpty() && !saving, modifier = Modifier.weight(1f), colors = ButtonDefaults.outlinedButtonColors(contentColor = PosIvory)) { Text("Clear") }
+                OutlinedButton(onClick = onClear, enabled = cart.isNotEmpty() && !saving, modifier = Modifier.weight(0.8f), colors = ButtonDefaults.outlinedButtonColors(contentColor = PosIvory)) { Text("Clear") }
+                OutlinedButton(onClick = onHold, enabled = cart.isNotEmpty() && !saving, modifier = Modifier.weight(0.9f), colors = ButtonDefaults.outlinedButtonColors(contentColor = PosMustard)) { Text("Hold") }
                 Button(onClick = onCheckout, enabled = canCheckout, modifier = Modifier.weight(1.5f), colors = ButtonDefaults.buttonColors(containerColor = PosOrange, contentColor = Color.White)) {
                     Text(if (saving) "Saving…" else "Complete sale")
                 }
