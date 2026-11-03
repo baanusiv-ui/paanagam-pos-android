@@ -23,4 +23,11 @@ class InventoryRulesTest {
         assertTrue(isCoffeePowderReductionAllowed(true, "g", 12345L))
         assertTrue(isCoffeePowderReductionAllowed(false, "kg", -12345L))
     }
+
+    @Test fun refundMustMatchOriginalCashAndUpiSplitExactly() {
+        assertTrue(isRefundSplitValid(10000L, 4000L, 6000L, 4000L, 6000L))
+        assertFalse(isRefundSplitValid(10000L, 4000L, 6000L, 10000L, 0L))
+        assertFalse(isRefundSplitValid(10000L, 4000L, 6000L, 4000L, 5000L))
+        assertFalse(isRefundSplitValid(10000L, -1L, 10001L, -1L, 10001L))
+    }
 }
