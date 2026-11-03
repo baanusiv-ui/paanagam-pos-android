@@ -331,6 +331,9 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         val sale = saleById(saleId) ?: error("Sale not found.")
         require(sale.status == "COMPLETED") { "Only completed, not-yet-refunded sales can be refunded." }
         require(cashRefundPaise >= 0 && upiRefundPaise >= 0)
+        require(cashRefundPaise == sale.cashPaidPaise && upiRefundPaise == sale.upiPaidPaise) {
+            "Refund must preserve the original payment method split."
+        }
         require(Math.addExact(cashRefundPaise, upiRefundPaise) == sale.totalPaise) { "Refund split must equal the original bill total." }
         val movements = saleConsumptionMovements(saleId)
         require(movements.isNotEmpty()) { "No original stock consumption was found. Refund blocked to avoid an incomplete stock reversal." }
