@@ -153,7 +153,7 @@ fun CctvScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
                         },
                         factory = { viewContext ->
                             PlayerView(viewContext).apply {
-                                player = this@CctvScreenPlayer(player)
+                                this.player = player
                                 useController = false
                                 layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                             }
