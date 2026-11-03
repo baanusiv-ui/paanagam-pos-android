@@ -326,10 +326,14 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     suspend fun stockLot(lotId: String): StockLot?
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertSaleRefund(refund: SaleRefund)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertCctvAuditEvent(event: CctvAuditEvent)
+    @Query("SELECT * FROM cctv_audit_events ORDER BY createdAt DESC")
+    fun cctvAuditEvents(): Flow<List<CctvAuditEvent>>
     @Query("SELECT * FROM sale_refunds WHERE saleId = :saleId ORDER BY refundedAt DESC")
     suspend fun saleRefunds(saleId: String): List<SaleRefund>
     @Transaction
-    suspend fun refundCompletedSale(saleId: String, reason: String, refundedAt: Long, cashRefundPaise: Long, upiRefundPaise: Long) {
+    suspend fun refundCompletedSale(saleId: String, reason: String, refundedAt: Long, cashRefundPaise: Long, upiRefundPaise: Long, cashierId: String, cashierName: String) {
         require(reason.isNotBlank()) { "Enter a refund reason." }
         val sale = saleById(saleId) ?: error("Sale not found.")
         require(sale.status == "COMPLETED") { "Only completed, not-yet-refunded sales can be refunded." }
@@ -351,6 +355,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         insertSaleRefund(SaleRefund(UUID.randomUUID().toString(), saleId, refundedAt, sale.totalPaise, cashRefundPaise, upiRefundPaise, reason.trim()))
         updateSaleStatus(saleId, "REFUNDED")
         updateKitchenTicketStatus(saleId, "CANCELLED", refundedAt)
+        insertCctvAuditEvent(CctvAuditEvent(UUID.randomUUID().toString(), saleId, "SALE_REFUND", reason.trim(), sale.totalPaise, cashierId, cashierName, refundedAt, "LOCAL_BOOKMARK"))
     }
     @Query("SELECT * FROM sales ORDER BY createdAt DESC")
     fun sales(): Flow<List<Sale>>
@@ -497,7 +502,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, CashMovement::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class, HeldOrder::class, HeldOrderLine::class, SalesReconciliation::class, SaleRefund::class, DeviceBinding::class], version = 26, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, CashMovement::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class, HeldOrder::class, HeldOrderLine::class, SalesReconciliation::class, SaleRefund::class, DeviceBinding::class, CctvAuditEvent::class], version = 27, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
