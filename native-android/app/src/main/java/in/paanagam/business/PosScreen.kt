@@ -54,6 +54,7 @@ fun PosScreen(db: PaanagamDatabase) {
     var newName by remember { mutableStateOf("") }
     var newCategory by remember { mutableStateOf("Beverages") }
     var newPrice by remember { mutableStateOf("") }
+    var newIsCoffee by remember { mutableStateOf(false) }
 
     LaunchedEffect(customerPhone) {
         loyaltyRewards = if (customerPhone.length == 10) db.dao().loyaltyAccount(customerPhone)?.freeCoffeesAvailable ?: 0 else 0
@@ -77,7 +78,7 @@ fun PosScreen(db: PaanagamDatabase) {
     }
     val upiPartPaise = total - cashPartPaise
     val itemCount = cartItems.sumOf { it.second }
-    val coffeeItem = cartItems.firstOrNull { it.first.name.contains("coffee", ignoreCase = true) }?.first
+    val coffeeItem = cartItems.firstOrNull { it.first.isCoffee }?.first
     val missingRecipes = cartItems.map { it.first }.filter { item ->
         val components = comboComponents.filter { it.comboItemId == item.id }
         if (components.isEmpty()) recipeLines.none { it.menuItemId == item.id }
@@ -149,12 +150,13 @@ fun PosScreen(db: PaanagamDatabase) {
                     newName = newName, onNewName = { newName = it },
                     newCategory = newCategory, onNewCategory = { newCategory = it },
                     newPrice = newPrice, onNewPrice = { newPrice = it },
+                    newIsCoffee = newIsCoffee, onNewIsCoffee = { newIsCoffee = it },
                     onSaveNew = {
                         val price = newPrice.toDoubleOrNull()
                         if (newName.isBlank() || price == null || price <= 0) message = "Enter a menu item and a valid price."
                         else scope.launch {
-                            db.dao().saveCatalogItem(CatalogItem(UUID.randomUUID().toString(), newName.trim(), newCategory.trim(), (price * 100).toLong()))
-                            newName = ""; newPrice = ""; showAddItem = false; message = "Menu item added."
+                            db.dao().saveCatalogItem(CatalogItem(UUID.randomUUID().toString(), newName.trim(), newCategory.trim(), (price * 100).toLong(), isCoffee = newIsCoffee))
+                            newName = ""; newPrice = ""; newIsCoffee = false; showAddItem = false; message = "Menu item added."
                         }
                     }
                 )
@@ -323,6 +325,8 @@ private fun PosMenuPanel(
     onNewCategory: (String) -> Unit,
     newPrice: String,
     onNewPrice: (String) -> Unit,
+    newIsCoffee: Boolean,
+    onNewIsCoffee: (Boolean) -> Unit,
     onSaveNew: () -> Unit
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -344,6 +348,10 @@ private fun PosMenuPanel(
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         OutlinedTextField(newCategory, onNewCategory, label = { Text("Category") }, modifier = Modifier.weight(1f), singleLine = true)
                         OutlinedTextField(newPrice, onNewPrice, label = { Text("Price ₹") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = newIsCoffee, onCheckedChange = onNewIsCoffee)
+                        Text("Counts toward coffee loyalty", color = PosBrown, style = MaterialTheme.typography.bodySmall)
                     }
                     Button(onClick = onSaveNew, colors = ButtonDefaults.buttonColors(containerColor = PosWalnut)) { Text("Save menu item") }
                 }
