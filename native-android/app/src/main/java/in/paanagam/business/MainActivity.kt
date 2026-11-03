@@ -210,6 +210,7 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                         "Production", "Wastage" -> ProductionScreen(db)
                         "WhatsApp Settings" -> WhatsAppSettingsScreen()
                         "Staff & HR" -> StaffAdminScreen(db, activeStaff!!)
+                        "Reports", "Food Cost", "Finance & P&L" -> ReportsScreen(db, selected)
                         else -> ModuleScreen(selected)
                     }
                     }
