@@ -15,30 +15,29 @@ import java.util.Locale
 
 @Composable
 fun KitchenKdsScreen(db: PaanagamDatabase) {
-    val tickets by db.dao().kitchenTickets().collectAsState(initial = emptyList())
+    val allTickets by db.dao().kitchenTickets().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var linesBySale by remember { mutableStateOf<Map<String, List<SaleLine>>>(emptyMap()) }
+    var showCompleted by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
-    LaunchedEffect(tickets) {
+    LaunchedEffect(allTickets) {
         val loaded = mutableMapOf<String, List<SaleLine>>()
-        tickets.forEach { ticket -> loaded[ticket.saleId] = db.dao().saleLines(ticket.saleId) }
+        allTickets.forEach { ticket -> loaded[ticket.saleId] = db.dao().saleLines(ticket.saleId) }
         linesBySale = loaded
     }
-    val queued = tickets.count { it.status == "QUEUED" }
-    val preparing = tickets.count { it.status == "PREPARING" }
-    val ready = tickets.count { it.status == "READY" }
+    val active = allTickets.filter { it.status != "COMPLETED" }
+    val visible = if (showCompleted) allTickets.filter { it.status == "COMPLETED" } else active
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Kitchen display", style = MaterialTheme.typography.headlineSmall)
         Text("Live POS tickets • oldest orders first", style = MaterialTheme.typography.bodySmall)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            KdsCount("Queued", queued, Modifier.weight(1f))
-            KdsCount("Preparing", preparing, Modifier.weight(1f))
-            KdsCount("Ready", ready, Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = !showCompleted, onClick = { showCompleted = false }, label = { Text("Active (${active.size})") })
+            FilterChip(selected = showCompleted, onClick = { showCompleted = true }, label = { Text("Completed") })
         }
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.primary)
-        if (tickets.isEmpty()) Text("No active kitchen tickets. New POS bills appear automatically.")
+        if (visible.isEmpty()) Text(if (showCompleted) "No completed tickets yet." else "No active kitchen tickets.")
         LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
-            items(tickets, key = { it.id }) { ticket ->
+            items(visible, key = { it.saleId }) { ticket ->
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -50,27 +49,22 @@ fun KitchenKdsScreen(db: PaanagamDatabase) {
                             Text("${line.quantity} × ${line.itemName}", style = MaterialTheme.typography.bodyLarge)
                         }
                         val next = when (ticket.status) {
-                            "QUEUED" -> "PREPARING"
+                            "NEW" -> "PREPARING"
                             "PREPARING" -> "READY"
-                            "READY" -> "SERVED"
+                            "READY" -> "COMPLETED"
                             else -> ""
                         }
                         if (next.isNotBlank()) Button(onClick = {
                             scope.launch {
-                                db.dao().updateKitchenTicketStatus(ticket.id, next, System.currentTimeMillis())
+                                db.dao().updateKitchenTicketStatus(ticket.saleId, next, System.currentTimeMillis())
                                 message = "Order moved to $next."
                             }
                         }, modifier = Modifier.fillMaxWidth()) {
-                            Text(when (next) { "PREPARING" -> "Accept • Start preparing"; "READY" -> "Mark ready"; else -> "Mark served" })
+                            Text(when (next) { "PREPARING" -> "Accept • Start preparing"; "READY" -> "Mark ready"; else -> "Complete order" })
                         }
                     }
                 }
             }
         }
     }
-}
-
-@Composable
-private fun KdsCount(label: String, count: Int, modifier: Modifier = Modifier) {
-    Card(modifier) { Column(Modifier.padding(10.dp)) { Text(label, style = MaterialTheme.typography.labelSmall); Text(count.toString(), style = MaterialTheme.typography.titleLarge) } }
 }
