@@ -163,3 +163,18 @@ data class SaleRefund(
 
 @Entity(tableName = "device_binding")
 data class DeviceBinding(@PrimaryKey val id: Int = 1, val androidId: String, val boundAt: Long, val approvedByStaffId: String)
+
+
+@Entity(tableName = "cctv_audit_events", indices = [Index(value = ["createdAt"]), Index(value = ["saleId"])])
+data class CctvAuditEvent(
+    @PrimaryKey val id: String,
+    val saleId: String,
+    val eventType: String,
+    val reason: String,
+    val amountPaise: Long,
+    val cashierId: String,
+    val cashierName: String,
+    val createdAt: Long,
+    val cameraBookmarkStatus: String = "LOCAL_BOOKMARK",
+    val clipReference: String = ""
+)
