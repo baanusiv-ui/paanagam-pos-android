@@ -76,7 +76,10 @@ fun CashShiftScreen(db: PaanagamDatabase) {
                     busy = false
                 }
             }, modifier = Modifier.fillMaxWidth()) { Text("Record cash movement") }
-            movements.forEach { movement -> Text("${movement.type.replace("_", " ")} • ₹%.2f • ${movement.note}".format(movement.amountPaise / 100.0), color = Color(0xFF65736B), style = MaterialTheme.typography.bodySmall) }
+            movements.forEach { movement ->
+                val formattedAmount = "%.2f".format(Locale.getDefault(), movement.amountPaise / 100.0)
+                Text("${movement.type.replace("_", " ")} • ₹$formattedAmount • ${movement.note}", color = Color(0xFF65736B), style = MaterialTheme.typography.bodySmall)
+            }
             OutlinedTextField(counted, { counted = it }, label = { Text("Actual cash counted (₹)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(notes, { notes = it }, label = { Text("Closing notes (optional)") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
             Button(enabled = !busy && money(counted) != null, onClick = {
