@@ -50,3 +50,6 @@ data class RecipeLine(@PrimaryKey val id: String, val menuItemId: String, val in
 
 @Entity(tableName = "sale_costs")
 data class SaleCost(@PrimaryKey val saleId: String, val ingredientCostPaise: Long)
+
+@Entity(tableName = "staff_members")
+data class StaffMember(@PrimaryKey val id: String, val name: String, val role: String, val pinSalt: String, val pinHash: String, val active: Boolean = true, val createdAt: Long)
