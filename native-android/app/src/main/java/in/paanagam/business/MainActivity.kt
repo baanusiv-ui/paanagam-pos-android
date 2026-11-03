@@ -257,14 +257,16 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, onRecreate: () 
     var selected by remember { mutableStateOf("Dashboard") }
     var activeStaff by remember { mutableStateOf<StaffMember?>(null) }
     var firstStaffExists by remember { mutableStateOf<Boolean?>(null) }
+    var deviceCheckComplete by remember { mutableStateOf(false) }
     var deviceTransferRequired by remember { mutableStateOf(false) }
     var deviceTransferMessage by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     LaunchedEffect(db, androidId) {
         val staffExists = db.dao().firstActiveStaff() != null
-        firstStaffExists = staffExists
         val binding = db.dao().deviceBinding()
         deviceTransferRequired = staffExists && (binding == null || binding.androidId != androidId)
+        firstStaffExists = staffExists
+        deviceCheckComplete = true
     }
     var showMore by remember { mutableStateOf(false) }
     val sops by db.dao().sops().collectAsState(initial = emptyList())
@@ -331,7 +333,7 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, onRecreate: () 
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 when {
-                    firstStaffExists == null -> CircularProgressIndicator()
+                    !deviceCheckComplete || firstStaffExists == null -> CircularProgressIndicator()
                     firstStaffExists == false -> AdminSetupScreen { name, pin ->
                         scope.launch {
                             val c = pinCredentials(pin)
