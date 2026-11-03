@@ -17,6 +17,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -27,21 +28,22 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.room.RoomDatabase
 import `in`.paanagam.business.data.PaanagamDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.util.UUID
 
 private const val PAANAGAM_DB_NAME = "paanagam-local.db"
 
 private object PaanagamDatabaseBackup {
-    fun export(context: Context, db: PaanagamDatabase, destination: Uri) {
+    fun export(context: Context, db: PaanagamDatabase, destination: Uri, passphrase: CharArray) {
         val liveDb = db.openHelper.writableDatabase
         liveDb.query("PRAGMA wal_checkpoint(TRUNCATE)").use { cursor ->
             if (cursor.moveToFirst() && cursor.getInt(0) != 0) {
@@ -53,10 +55,12 @@ private object PaanagamDatabaseBackup {
         require(source.isFile && source.length() > 0L) { "Local database file was not found." }
         val output = context.contentResolver.openOutputStream(destination, "wt")
             ?: error("Could not open the selected backup destination.")
-        FileInputStream(source).use { input -> output.use { input.copyTo(it) } }
+        FileInputStream(source).use { input ->
+            output.use { PortableBackupCrypto.encrypt(input, it, passphrase) }
+        }
     }
 
-    fun restore(context: Context, db: PaanagamDatabase, backupUri: Uri) {
+    fun restore(context: Context, db: PaanagamDatabase, backupUri: Uri, passphrase: CharArray) {
         val liveFile = context.getDatabasePath(PAANAGAM_DB_NAME)
         val directory = liveFile.parentFile ?: error("Database directory is unavailable.")
         val staged = File(directory, "paanagam-restore-${UUID.randomUUID()}.tmp")
@@ -64,8 +68,12 @@ private object PaanagamDatabaseBackup {
         try {
             val input = context.contentResolver.openInputStream(backupUri)
                 ?: error("Could not read the selected backup file.")
-            input.use { source -> staged.outputStream().use { source.copyTo(it) } }
-            require(staged.isFile && staged.length() > 0L) { "The selected backup is empty." }
+            input.use { encrypted ->
+                FileOutputStream(staged).use { decrypted ->
+                    PortableBackupCrypto.decrypt(encrypted, decrypted, passphrase)
+                }
+            }
+            require(staged.isFile && staged.length() > 0L) { "The decrypted backup is empty." }
             validateBackup(staged)
 
             db.close()
@@ -81,6 +89,8 @@ private object PaanagamDatabaseBackup {
             staged.delete()
             if (!liveFile.exists() && previous.exists()) previous.renameTo(liveFile)
             throw error
+        } finally {
+            passphrase.fill('\u0000')
         }
     }
 
@@ -115,23 +125,33 @@ fun DatabaseBackupScreen(db: PaanagamDatabase, onRecreate: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var pendingRestore by remember { mutableStateOf<Uri?>(null) }
+    var passwordDialog by remember { mutableStateOf("") }
+    var backupPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var restorePassword by remember { mutableStateOf("") }
+    var exportPassphrase by remember { mutableStateOf<CharArray?>(null) }
 
     val createBackup = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri ->
-        if (uri != null) {
+        val secret = exportPassphrase
+        exportPassphrase = null
+        if (uri != null && secret != null) {
             busy = true
             scope.launch {
                 try {
-                    withContext(Dispatchers.IO) { PaanagamDatabaseBackup.export(context, db, uri) }
-                    message = "Backup saved. The app will reopen its local database."
+                    withContext(Dispatchers.IO) { PaanagamDatabaseBackup.export(context, db, uri, secret) }
+                    message = "Encrypted backup saved. Keep the passphrase separately; it cannot be recovered."
                 } catch (error: Throwable) {
+                    secret.fill('\u0000')
                     message = error.message ?: "Backup could not be completed."
                 } finally {
                     runCatching { db.close() }
                     onRecreate()
                 }
             }
+        } else {
+            secret?.fill('\u0000')
         }
     }
     val chooseBackup = rememberLauncherForActivityResult(
@@ -142,52 +162,91 @@ fun DatabaseBackupScreen(db: PaanagamDatabase, onRecreate: () -> Unit) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Local data backup & restore", color = Color(0xFFB87928), style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
-        Text("Export the complete Paanagam database to a file you control. Restore it on this device or another Android device with Paanagam installed.")
+        Text("Encrypted data backup & restore", color = Color(0xFFB87928), style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
+        Text("Create a portable, passphrase-protected backup that can be restored on another Android device.")
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8E9))) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Important")
-                Text("IMPORTANT: The exported .db backup is currently a raw, unencrypted SQLite file. It contains sales, stock, recipes, staff names and PIN hashes. Do not upload or share it; store it only in trusted local or USB storage. Encrypted backup export is still pending. Restoring replaces all current app data with the selected backup.")
+                Text("Security")
+                Text("Backup files use AES-256-GCM authenticated encryption with a key derived from your passphrase. The passphrase is not stored. The live on-device Room database remains unencrypted at this stage.")
             }
         }
         Button(
-            onClick = { createBackup.launch("paanagam-backup.db") },
+            onClick = { passwordDialog = "EXPORT" },
             enabled = !busy,
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Create database backup") }
+        ) { Text("Create encrypted backup") }
         OutlinedButton(
-            onClick = { chooseBackup.launch(arrayOf("application/octet-stream", "application/x-sqlite3", "application/vnd.sqlite3", "*/*")) },
+            onClick = { chooseBackup.launch(arrayOf("application/octet-stream", "*/*")) },
             enabled = !busy,
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Choose backup to restore") }
+        ) { Text("Choose encrypted backup to restore") }
         if (busy) CircularProgressIndicator()
         if (message.isNotBlank()) Text(message)
         Spacer(Modifier.height(4.dp))
-        Text("Use the Android file picker to save the backup to local storage, USB storage or a location you trust. Keep a separate copy away from the POS device.")
+        Text("Store the encrypted file separately from the POS device. If you lose the passphrase, the backup cannot be decrypted.")
+    }
+
+    if (passwordDialog == "EXPORT") {
+        AlertDialog(
+            onDismissRequest = { passwordDialog = ""; backupPassword = ""; confirmPassword = "" },
+            title = { Text("Protect backup") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Choose a passphrase with at least 10 characters. You will need it to restore this backup.")
+                    OutlinedTextField(backupPassword, { backupPassword = it }, label = { Text("Backup passphrase") }, visualTransformation = PasswordVisualTransformation(), singleLine = true)
+                    OutlinedTextField(confirmPassword, { confirmPassword = it }, label = { Text("Confirm passphrase") }, visualTransformation = PasswordVisualTransformation(), singleLine = true)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (backupPassword.length < 10 || backupPassword != confirmPassword) {
+                        message = "Passphrases must match and contain at least 10 characters."
+                    } else {
+                        exportPassphrase = backupPassword.toCharArray()
+                        passwordDialog = ""
+                        backupPassword = ""; confirmPassword = ""
+                        createBackup.launch("paanagam-encrypted-backup.pgb")
+                    }
+                }) { Text("Continue") }
+            },
+            dismissButton = { TextButton(onClick = { passwordDialog = ""; backupPassword = ""; confirmPassword = "" }) { Text("Cancel") } }
+        )
     }
 
     pendingRestore?.let { uri ->
         AlertDialog(
-            onDismissRequest = { pendingRestore = null },
-            title = { Text("Replace this device's data?") },
-            text = { Text("Paanagam will validate the selected SQLite backup first. If valid, it will replace the current database. This cannot be undone unless you have a separate backup.") },
+            onDismissRequest = { pendingRestore = null; restorePassword = "" },
+            title = { Text("Restore encrypted backup?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Enter the passphrase used when this backup was created. The file is authenticated and checked before replacing the current database.")
+                    OutlinedTextField(restorePassword, { restorePassword = it }, label = { Text("Backup passphrase") }, visualTransformation = PasswordVisualTransformation(), singleLine = true)
+                }
+            },
             confirmButton = {
                 TextButton(onClick = {
-                    pendingRestore = null
-                    busy = true
-                    scope.launch {
-                        try {
-                            withContext(Dispatchers.IO) { PaanagamDatabaseBackup.restore(context, db, uri) }
-                            message = "Backup restored successfully."
-                        } catch (error: Throwable) {
-                            message = error.message ?: "Restore could not be completed."
-                        } finally {
-                            onRecreate()
+                    if (restorePassword.length < 10) {
+                        message = "Enter the backup passphrase."
+                    } else {
+                        val secret = restorePassword.toCharArray()
+                        restorePassword = ""
+                        pendingRestore = null
+                        busy = true
+                        scope.launch {
+                            try {
+                                withContext(Dispatchers.IO) { PaanagamDatabaseBackup.restore(context, db, uri, secret) }
+                                message = "Encrypted backup restored and validated successfully."
+                            } catch (error: Throwable) {
+                                secret.fill('\u0000')
+                                message = error.message ?: "Restore could not be completed."
+                            } finally {
+                                onRecreate()
+                            }
                         }
                     }
                 }) { Text("Restore data") }
             },
-            dismissButton = { TextButton(onClick = { pendingRestore = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { pendingRestore = null; restorePassword = "" }) { Text("Cancel") } }
         )
     }
 }
