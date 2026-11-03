@@ -333,8 +333,9 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     @Query("SELECT * FROM sale_refunds WHERE saleId = :saleId ORDER BY refundedAt DESC")
     suspend fun saleRefunds(saleId: String): List<SaleRefund>
     @Transaction
-    suspend fun refundCompletedSale(saleId: String, reason: String, refundedAt: Long, cashRefundPaise: Long, upiRefundPaise: Long, cashierId: String, cashierName: String) {
+    suspend fun refundCompletedSale(saleId: String, reason: String, refundedAt: Long, cashRefundPaise: Long, upiRefundPaise: Long, cashierId: String, cashierName: String, stockDisposition: String) {
         require(reason.isNotBlank()) { "Enter a refund reason." }
+        require(stockDisposition in setOf("RESTOCK", "WASTED")) { "Choose whether returned food is safe to restock or must be recorded as wastage." }
         val sale = saleById(saleId) ?: error("Sale not found.")
         require(sale.status == "COMPLETED") { "Only completed, not-yet-refunded sales can be refunded." }
         require(isRefundSplitValid(sale.totalPaise, sale.cashPaidPaise, sale.upiPaidPaise, cashRefundPaise, upiRefundPaise)) {
@@ -345,8 +346,13 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         movements.forEach { movement ->
             val lot = stockLot(movement.lotId) ?: error("Original FIFO lot is missing. Refund blocked.")
             require(lot.ingredientId == movement.ingredientId && lot.location == movement.fromLocation && movement.quantityBaseUnits > 0)
-            updateLotBalance(lot.id, Math.addExact(lot.remainingBaseUnits, movement.quantityBaseUnits))
-            insertStockMovement(StockMovement(UUID.randomUUID().toString(), movement.ingredientId, lot.id, "SALE_REFUND_RESTOCK", "", lot.location, movement.quantityBaseUnits, movement.unitCostPaise, saleId, refundedAt))
+            if (stockDisposition == "RESTOCK") {
+                updateLotBalance(lot.id, Math.addExact(lot.remainingBaseUnits, movement.quantityBaseUnits))
+                insertStockMovement(StockMovement(UUID.randomUUID().toString(), movement.ingredientId, lot.id, "SALE_REFUND_RESTOCK", "", lot.location, movement.quantityBaseUnits, movement.unitCostPaise, saleId, refundedAt))
+            } else {
+                val cost = calculateFifoCostPaise(listOf(movement.quantityBaseUnits to movement.unitCostPaise))
+                insertWastage(WastageRecord(UUID.randomUUID().toString(), movement.ingredientId, lot.location, movement.quantityBaseUnits, "Refund " + saleId + ": " + reason.trim(), refundedAt, cost))
+            }
         }
         if (cashRefundPaise > 0) {
             val shift = getOpenCashShift() ?: error("Open a cash shift before issuing a cash refund.")
