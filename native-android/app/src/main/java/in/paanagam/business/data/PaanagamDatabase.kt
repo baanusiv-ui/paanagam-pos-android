@@ -86,6 +86,13 @@ interface PaanagamDao {
     @Transaction
     suspend fun completeSale(sale: Sale, lines: List<SaleLine>) {
         require(lines.isNotEmpty()) { "Bill has no items" }
+        val rewardLines = lines.filter { it.itemName.contains("coffee", ignoreCase = true) && it.unitPricePaise == 0L }
+        require(rewardLines.size <= 1 && rewardLines.all { it.quantity == 1 }) { "Only one free coffee can be redeemed per bill." }
+        val loyaltyBefore = if (rewardLines.isNotEmpty()) {
+            require(sale.customerPhone.matches(Regex("[0-9]{10}"))) { "Enter the customer's 10-digit mobile number to redeem." }
+            loyaltyAccount(sale.customerPhone)?.also { require(it.freeCoffeesAvailable > 0) { "No free coffee reward is available." } }
+                ?: error("No loyalty account found for this mobile number.")
+        } else null
         var totalIngredientCost = 0L
         lines.forEach { line ->
             require(line.quantity > 0)
@@ -100,21 +107,25 @@ interface PaanagamDao {
         recordSale(sale)
         saveSaleCost(SaleCost(sale.id, totalIngredientCost))
         recordSaleLines(lines)
-        if (sale.customerPhone.isNotBlank()) {
-            val coffeeCount = lines.filter { it.itemName.contains("coffee", ignoreCase = true) }.sumOf { it.quantity }
-            if (coffeeCount > 0) {
-                val previous = loyaltyAccount(sale.customerPhone)
-                val total = (previous?.coffeeProgress ?: 0) + coffeeCount
-                val earned = total / 10
-                saveLoyaltyAccount(LoyaltyAccount(
-                    phone = sale.customerPhone,
-                    customerName = previous?.customerName ?: sale.customerPhone,
-                    coffeeProgress = total % 10,
-                    freeCoffeesAvailable = (previous?.freeCoffeesAvailable ?: 0) + earned,
-                    lifetimeCoffeeCount = (previous?.lifetimeCoffeeCount ?: 0) + coffeeCount,
-                    updatedAt = sale.createdAt
-                ))
-            }
+        val paidCoffeeCount = lines.filter { it.itemName.contains("coffee", ignoreCase = true) && it.unitPricePaise > 0L }.sumOf { it.quantity }
+        if (loyaltyBefore != null) {
+            saveLoyaltyAccount(loyaltyBefore.copy(
+                freeCoffeesAvailable = loyaltyBefore.freeCoffeesAvailable - 1,
+                updatedAt = sale.createdAt
+            ))
+        }
+        if (sale.customerPhone.matches(Regex("[0-9]{10}")) && paidCoffeeCount > 0) {
+            val previous = loyaltyAccount(sale.customerPhone)
+            val total = (previous?.coffeeProgress ?: 0) + paidCoffeeCount
+            val earned = total / 10
+            saveLoyaltyAccount(LoyaltyAccount(
+                phone = sale.customerPhone,
+                customerName = previous?.customerName ?: sale.customerPhone,
+                coffeeProgress = total % 10,
+                freeCoffeesAvailable = (previous?.freeCoffeesAvailable ?: 0) + earned,
+                lifetimeCoffeeCount = (previous?.lifetimeCoffeeCount ?: 0) + paidCoffeeCount,
+                updatedAt = sale.createdAt
+            ))
         }
     }
     @Insert(onConflict = OnConflictStrategy.REPLACE)
