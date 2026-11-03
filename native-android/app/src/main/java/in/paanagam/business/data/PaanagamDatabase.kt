@@ -13,6 +13,26 @@ import java.util.UUID
 @Dao
 interface PaanagamDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertStockReconciliation(record: StockReconciliation)
+    @Query("SELECT * FROM stock_reconciliations ORDER BY reconciledAt DESC")
+    fun stockReconciliations(): Flow<List<StockReconciliation>>
+    @Transaction
+    suspend fun reconcileStock(record: StockReconciliation, item: Ingredient) {
+        require(record.location == "STORE" || record.location == "KITCHEN")
+        require(record.physicalQtyBaseUnits >= 0)
+        val variance = record.physicalQtyBaseUnits - record.systemQtyBaseUnits
+        require(variance == record.varianceBaseUnits)
+        if (variance > 0) {
+            val lot = StockLot(UUID.randomUUID().toString(), item.id, record.location, record.reconciledAt, variance, variance, item.baseUnit, record.adjustmentCostPaise)
+            insertStockLot(lot)
+            insertStockMovement(StockMovement(UUID.randomUUID().toString(), item.id, lot.id, "RECONCILIATION_GAIN", "", record.location, variance, record.adjustmentCostPaise, record.id, record.reconciledAt))
+        } else if (variance < 0) {
+            consumeFifo(item.id, record.location, -variance, record.id, "RECONCILIATION_LOSS", record.reconciledAt)
+        }
+        insertStockReconciliation(record)
+    }
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertOperationalRecord(record: OperationalRecord)
     @Query("SELECT * FROM operational_records WHERE module = :module ORDER BY createdAt DESC")
     fun operationalRecords(module: String): Flow<List<OperationalRecord>>
@@ -211,7 +231,7 @@ interface PaanagamDao {
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class], version = 9, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class], version = 10, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
