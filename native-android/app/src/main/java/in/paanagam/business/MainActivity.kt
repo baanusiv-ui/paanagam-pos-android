@@ -567,9 +567,23 @@ private fun StaffLoginScreen(db: PaanagamDatabase, onLogin: (StaffMember) -> Uni
 
 @Composable
 private fun AdminReauthGate(staff: StaffMember, actionTitle: String, content: @Composable () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val securityPrefs = remember(context) { context.getSharedPreferences("paanagam_session_security", android.content.Context.MODE_PRIVATE) }
     var pin by remember(staff.id, actionTitle) { mutableStateOf("") }
     var error by remember(staff.id, actionTitle) { mutableStateOf("") }
     var verified by remember(staff.id, actionTitle) { mutableStateOf(false) }
+    var lockoutUntil by remember(staff.id, actionTitle) {
+        mutableLongStateOf(securityPrefs.getLong("reauth_lockout_until_${staff.id}", 0L))
+    }
+
+    LaunchedEffect(lockoutUntil) {
+        val remaining = lockoutUntil - System.currentTimeMillis()
+        if (remaining > 0L) {
+            kotlinx.coroutines.delay(remaining)
+            lockoutUntil = 0L
+            error = "Lockout expired. You can try again."
+        }
+    }
 
     if (verified && staff.role == "ADMIN") {
         content()
@@ -585,23 +599,42 @@ private fun AdminReauthGate(staff: StaffMember, actionTitle: String, content: @C
                 onValueChange = { pin = it.filter(Char::isDigit).take(8) },
                 label = { Text("Admin PIN") },
                 singleLine = true,
+                enabled = System.currentTimeMillis() >= lockoutUntil,
                 modifier = Modifier.fillMaxWidth()
             )
             if (error.isNotBlank()) Text(error, color = Color.Red)
             Button(
                 onClick = {
-                    if (staff.role != "ADMIN" || !verifyPin(pin, staff.pinSalt, staff.pinHash)) {
-                        error = "Admin PIN verification failed."
-                        pin = ""
-                    } else {
+                    val now = System.currentTimeMillis()
+                    if (now < lockoutUntil) {
+                        error = "Too many incorrect PINs. Try again in ${(lockoutUntil - now + 999L) / 1000L} seconds."
+                    } else if (staff.role == "ADMIN" && verifyPin(pin, staff.pinSalt, staff.pinHash)) {
+                        securityPrefs.edit()
+                            .remove("reauth_failed_attempts_${staff.id}")
+                            .remove("reauth_lockout_until_${staff.id}")
+                            .apply()
                         verified = true
                         pin = ""
                         error = ""
+                    } else {
+                        val attempts = PinLockoutPolicy.nextFailedAttempt(
+                            securityPrefs.getInt("reauth_failed_attempts_${staff.id}", 0)
+                        )
+                        securityPrefs.edit().putInt("reauth_failed_attempts_${staff.id}", attempts).apply()
+                        if (PinLockoutPolicy.isLockoutRequired(attempts)) {
+                            val deadline = PinLockoutPolicy.lockoutDeadlineMillis(now, attempts)
+                            securityPrefs.edit().putLong("reauth_lockout_until_${staff.id}", deadline).apply()
+                            lockoutUntil = deadline
+                            error = "Too many incorrect PINs. Verification locked for ${PinLockoutPolicy.lockoutDurationMillis(attempts) / 1000L} seconds."
+                        } else {
+                            error = "Incorrect PIN. ${5 - attempts} attempts remain before a temporary lockout."
+                        }
+                        pin = ""
                     }
                 },
-                enabled = pin.length in 4..8,
+                enabled = pin.length in 4..8 && System.currentTimeMillis() >= lockoutUntil,
                 modifier = Modifier.fillMaxWidth()
-            ) { Text("Verify and continue") }
+            ) { Text(if (System.currentTimeMillis() < lockoutUntil) "Verification locked" else "Verify and continue") }
         }
     }
 }
