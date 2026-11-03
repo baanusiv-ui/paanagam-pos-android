@@ -22,11 +22,14 @@ private val ReportGold = Color(0xFF16845B)
 fun ReportsScreen(db: PaanagamDatabase, title: String) {
     val sales by db.dao().sales().collectAsState(initial = emptyList())
     val costs by db.dao().saleCosts().collectAsState(initial = emptyList())
+    val expenses by db.dao().operationalRecords("Operating Expenses").collectAsState(initial = emptyList())
     val costBySale = remember(costs) { costs.associate { it.saleId to it.ingredientCostPaise } }
     val todayKey = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
     val today = sales.filter { SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date(it.createdAt)) == todayKey && it.status == "COMPLETED" }
     val todaySales = today.sumOf { it.totalPaise }
     val todayCost = today.sumOf { costBySale[it.id] ?: 0L }
+    val todayExpenses = expenses.filter { SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date(it.createdAt)) == todayKey }.sumOf { it.amountPaise }
+    val allExpenses = expenses.sumOf { it.amountPaise }
     val allSales = sales.filter { it.status == "COMPLETED" }
     val cash = today.sumOf { it.cashPaidPaise }
     val upi = today.sumOf { it.upiPaidPaise }
@@ -48,7 +51,10 @@ fun ReportsScreen(db: PaanagamDatabase, title: String) {
                 Text("Payment split • Today", color = ReportInk, fontWeight = FontWeight.SemiBold)
                 Text("Cash  ${rupees(cash)}", color = ReportInk)
                 Text("UPI  ${rupees(upi)}", color = ReportInk)
+                Text("Operating expenses today: ${rupees(todayExpenses)}", color = ReportInk)
+                Text("Operating profit today: ${rupees(todaySales - todayCost - todayExpenses)}", color = ReportInk, fontWeight = FontWeight.Bold)
                 Text("All-time completed sales: ${allSales.size} bills • ${rupees(allSales.sumOf { it.totalPaise })}", color = ReportInk)
+                Text("All-time recorded operating expenses: ${rupees(allExpenses)}", color = ReportInk)
             }
         }
         Text("Recent bills", color = ReportGold, fontWeight = FontWeight.Bold)
@@ -71,7 +77,7 @@ fun ReportsScreen(db: PaanagamDatabase, title: String) {
                 }
             }
         }
-        Text("Gross margin is before rent, wages, utilities, tax and other operating expenses.", color = Color(0xFF718078), style = MaterialTheme.typography.labelSmall)
+        Text("Operating profit subtracts expenses entered in Operating Expenses. GST, depreciation, unpaid bills and other statutory accounting adjustments are not included.", color = Color(0xFF718078), style = MaterialTheme.typography.labelSmall)
     }
 }
 
