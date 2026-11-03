@@ -43,6 +43,7 @@ fun PosScreen(db: PaanagamDatabase) {
     var selectedCategory by remember { mutableStateOf("All") }
     var cart by remember { mutableStateOf<Map<String, Pair<CatalogItem, Int>>>(emptyMap()) }
     var payment by remember { mutableStateOf("CASH") }
+    var cashPartInput by remember { mutableStateOf("") }
     var customerPhone by remember { mutableStateOf("") }
     var loyaltyRewards by remember { mutableIntStateOf(0) }
     var redeemFreeCoffee by remember { mutableStateOf(false) }
@@ -69,6 +70,12 @@ fun PosScreen(db: PaanagamDatabase) {
     }
     val cartItems = cart.values.toList()
     val total = cartItems.sumOf { it.first.pricePaise * it.second }
+    val cashPartPaise = when (payment) {
+        "CASH" -> total
+        "UPI" -> 0L
+        else -> ((cashPartInput.toDoubleOrNull() ?: 0.0) * 100).toLong()
+    }
+    val upiPartPaise = total - cashPartPaise
     val itemCount = cartItems.sumOf { it.second }
     val coffeeItem = cartItems.firstOrNull { it.first.name.contains("coffee", ignoreCase = true) }?.first
     val missingRecipes = cartItems.map { it.first }.filter { item ->
@@ -77,7 +84,9 @@ fun PosScreen(db: PaanagamDatabase) {
         else components.any { part -> recipeLines.none { it.menuItemId == part.componentItemId } }
     }
     val canCheckout = cart.isNotEmpty() && !saving && missingRecipes.isEmpty() &&
-        (payment != "CASH" || activeShift != null) &&
+        cashPartPaise in 0L..total && upiPartPaise >= 0L &&
+        (payment != "SPLIT" || (cashPartPaise > 0L && upiPartPaise > 0L)) &&
+        (cashPartPaise == 0L || activeShift != null) &&
         (!redeemFreeCoffee || (customerPhone.length == 10 && loyaltyRewards > 0 && coffeeItem != null))
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -162,6 +171,9 @@ fun PosScreen(db: PaanagamDatabase) {
                     coffeeItem = coffeeItem,
                     payment = payment,
                     onPayment = { payment = it },
+                    cashPartInput = cashPartInput,
+                    onCashPartInput = { cashPartInput = it.filter { ch -> ch.isDigit() || ch == '.' }.take(9) },
+                    upiRemainder = upiPartPaise,
                     activeShift = activeShift != null,
                     missingRecipes = missingRecipes,
                     saving = saving,
@@ -196,7 +208,7 @@ fun PosScreen(db: PaanagamDatabase) {
                             lines.add(SaleLine(UUID.randomUUID().toString(), saleId, coffeeItem.id, coffeeItem.name, 1, 0L, 0L))
                         }
                         scope.launch {
-                            runCatching { db.dao().completeSale(Sale(saleId, System.currentTimeMillis(), total, payment, customerPhone = customerPhone), lines) }
+                            runCatching { db.dao().completeSale(Sale(saleId, System.currentTimeMillis(), total, payment, customerPhone = customerPhone, cashPaidPaise = cashPartPaise, upiPaidPaise = upiPartPaise), lines) }
                                 .onSuccess { cart = emptyMap(); customerPhone = ""; redeemFreeCoffee = false; loyaltyRewards = 0; message = "Bill saved successfully." }
                                 .onFailure { message = it.message ?: "Checkout failed. No sale was confirmed." }
                             saving = false
@@ -401,6 +413,9 @@ private fun PosCartPanel(
     coffeeItem: CatalogItem?,
     payment: String,
     onPayment: (String) -> Unit,
+    cashPartInput: String,
+    onCashPartInput: (String) -> Unit,
+    upiRemainder: Long,
     activeShift: Boolean,
     missingRecipes: List<CatalogItem>,
     saving: Boolean,
@@ -482,9 +497,22 @@ private fun PosCartPanel(
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(selected = payment == "CASH", onClick = { onPayment("CASH") }, label = { Text("Cash") })
                     FilterChip(selected = payment == "UPI", onClick = { onPayment("UPI") }, label = { Text("UPI") })
+                    FilterChip(selected = payment == "SPLIT", onClick = { onPayment("SPLIT") }, label = { Text("Split") })
                 }
             }
-            if (payment == "CASH" && !activeShift) {
+            if (payment == "SPLIT") {
+                OutlinedTextField(
+                    value = cashPartInput,
+                    onValueChange = onCashPartInput,
+                    label = { Text("Cash portion ₹") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = PosIvory, unfocusedTextColor = PosIvory, focusedBorderColor = PosMustard, unfocusedBorderColor = Color(0xFF98785B), focusedLabelColor = PosMustard, unfocusedLabelColor = Color(0xFFD8C5A8))
+                )
+                Text("UPI balance: ₹%.2f".format(upiRemainder / 100.0), color = PosMustard, style = MaterialTheme.typography.labelSmall)
+            }
+            if ((payment == "CASH" || payment == "SPLIT") && !activeShift) {
                 Text("Open a cash shift before accepting cash payments.", color = Color(0xFFFFC28D), style = MaterialTheme.typography.labelSmall)
             }
             if (missingRecipes.isNotEmpty()) {
