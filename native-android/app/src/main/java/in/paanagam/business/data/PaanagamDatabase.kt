@@ -88,6 +88,21 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     @Query("SELECT * FROM suppliers WHERE id = :id")
     suspend fun supplier(id: String): Supplier?
 
+    @Query("SELECT * FROM cash_movements WHERE shiftId = :shiftId ORDER BY createdAt DESC")
+    fun cashMovements(shiftId: String): Flow<List<CashMovement>>
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertCashMovement(movement: CashMovement)
+    @Query("SELECT COALESCE(SUM(amountPaise), 0) FROM cash_movements WHERE shiftId = :shiftId AND type = 'CASH_IN'")
+    suspend fun cashInTotal(shiftId: String): Long
+    @Query("SELECT COALESCE(SUM(amountPaise), 0) FROM cash_movements WHERE shiftId = :shiftId AND type IN ('CASH_OUT', 'REFUND', 'WITHDRAWAL')")
+    suspend fun cashOutTotal(shiftId: String): Long
+    @Transaction
+    suspend fun recordCashMovement(movement: CashMovement) {
+        require(movement.amountPaise > 0 && movement.type in setOf("CASH_IN", "CASH_OUT", "REFUND", "WITHDRAWAL"))
+        val shift = getOpenCashShift() ?: error("Open a cash shift before recording cash movements.")
+        require(shift.id == movement.shiftId) { "Cash movement must belong to the active shift." }
+        insertCashMovement(movement)
+    }
     @Query("SELECT * FROM cash_shifts WHERE status = 'OPEN' ORDER BY openedAt DESC LIMIT 1")
     fun activeCashShift(): Flow<CashShift?>
     @Query("SELECT * FROM cash_shifts ORDER BY openedAt DESC")
@@ -111,7 +126,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         require(countedCashPaise >= 0)
         val shift = getOpenCashShift() ?: error("No open cash shift.")
         val cashSales = cashSalesTotal(shift.id)
-        val expected = shift.openingFloatPaise + cashSales
+        val expected = shift.openingFloatPaise + cashSales + cashInTotal(shift.id) - cashOutTotal(shift.id)
         val closed = shift.copy(
             closedAt = closedAt,
             expectedCashPaise = expected,
@@ -426,7 +441,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class, HeldOrder::class, HeldOrderLine::class, SalesReconciliation::class], version = 23, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, CashMovement::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class, HeldOrder::class, HeldOrderLine::class, SalesReconciliation::class], version = 24, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
