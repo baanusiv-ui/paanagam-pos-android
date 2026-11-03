@@ -210,6 +210,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 PosMenuPanel(
                     modifier = Modifier.weight(1f).fillMaxHeight(),
+                    saving = saving,
                     categories = categories,
                     selectedCategory = selectedCategory,
                     onCategory = { selectedCategory = it },
@@ -311,6 +312,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 PosMenuPanel(
                     modifier = Modifier.weight(1f),
+                    saving = saving,
                     categories = categories,
                     selectedCategory = selectedCategory,
                     onCategory = { selectedCategory = it },
@@ -413,6 +415,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
 @Composable
 private fun PosMenuPanel(
     modifier: Modifier,
+    saving: Boolean,
     categories: List<String>,
     selectedCategory: String,
     onCategory: (String) -> Unit,
@@ -442,31 +445,31 @@ private fun PosMenuPanel(
             }
             Text("OFFLINE READY", color = PosBrown, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
                 modifier = Modifier.background(Color(0xFFF3E6C9), RoundedCornerShape(20.dp)).padding(horizontal = 10.dp, vertical = 7.dp))
-            TextButton(onClick = onShowHeld) { Text("Held $heldCount", color = PosOrange) }
+            TextButton(onClick = onShowHeld, enabled = !saving) { Text("Held $heldCount", color = PosOrange) }
             Spacer(Modifier.width(6.dp))
-            TextButton(onClick = onToggleAdd) { Text(if (showAddItem) "Close" else "+ Menu item", color = PosBrown) }
+            TextButton(onClick = onToggleAdd, enabled = !saving) { Text(if (showAddItem) "Close" else "+ Menu item", color = PosBrown) }
         }
         if (showAddItem) {
             Card(colors = CardDefaults.cardColors(containerColor = PosIvory)) {
                 Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(newName, onNewName, label = { Text("Item name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    OutlinedTextField(newName, onNewName, label = { Text("Item name") }, modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !saving)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedTextField(newCategory, onNewCategory, label = { Text("Category") }, modifier = Modifier.weight(1f), singleLine = true)
-                        OutlinedTextField(newPrice, onNewPrice, label = { Text("Price ₹") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                        OutlinedTextField(newCategory, onNewCategory, label = { Text("Category") }, modifier = Modifier.weight(1f), singleLine = true, enabled = !saving)
+                        OutlinedTextField(newPrice, onNewPrice, label = { Text("Price ₹") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), enabled = !saving)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = newIsCoffee, onCheckedChange = onNewIsCoffee)
+                        Checkbox(checked = newIsCoffee, onCheckedChange = onNewIsCoffee, enabled = !saving)
                         Text("Counts toward coffee loyalty", color = PosBrown, style = MaterialTheme.typography.bodySmall)
                     }
-                    Button(onClick = onSaveNew, colors = ButtonDefaults.buttonColors(containerColor = PosWalnut)) { Text("Save menu item") }
+                    Button(onClick = onSaveNew, enabled = !saving, colors = ButtonDefaults.buttonColors(containerColor = PosWalnut)) { Text("Save menu item") }
                 }
             }
         }
-        OutlinedTextField(search, onSearch, modifier = Modifier.fillMaxWidth(), singleLine = true, placeholder = { Text("Search menu items…") })
+        OutlinedTextField(search, onSearch, modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !saving, placeholder = { Text("Search menu items…") })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(categories) { category ->
-                    FilterChip(selected = selectedCategory == category, onClick = { onCategory(category) }, label = { Text(category) })
+                    FilterChip(selected = selectedCategory == category, onClick = { onCategory(category) }, enabled = !saving, label = { Text(category) })
                 }
             }
         }
@@ -494,7 +497,7 @@ private fun PosMenuPanel(
                 ) {
                     gridItems(items, key = { it.id }) { item ->
                         Card(
-                            modifier = Modifier.fillMaxWidth().clickable { onAdd(item) },
+                            modifier = Modifier.fillMaxWidth().clickable(enabled = !saving) { onAdd(item) },
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(containerColor = Color.White),
                             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
@@ -576,10 +579,10 @@ private fun PosCartPanel(
                                 Text("₹${"%.2f".format(item.pricePaise / 100.0)} × $qty", color = Color(0xFFD8C5A8), style = MaterialTheme.typography.labelSmall)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                TextButton(onClick = { onDecrease(item.id, item, qty) }, contentPadding = PaddingValues(horizontal = 5.dp)) { Text("−", color = PosIvory) }
+                                TextButton(onClick = { onDecrease(item.id, item, qty) }, enabled = !saving, contentPadding = PaddingValues(horizontal = 5.dp)) { Text("−", color = PosIvory) }
                                 Text(qty.toString(), color = PosIvory, fontWeight = FontWeight.Bold)
-                                TextButton(onClick = { onIncrease(item.id, item, qty) }, contentPadding = PaddingValues(horizontal = 5.dp)) { Text("+", color = PosMustard) }
-                                TextButton(onClick = { onRemove(item.id) }, contentPadding = PaddingValues(horizontal = 3.dp)) { Text("×", color = Color(0xFFFFB59A)) }
+                                TextButton(onClick = { onIncrease(item.id, item, qty) }, enabled = !saving, contentPadding = PaddingValues(horizontal = 5.dp)) { Text("+", color = PosMustard) }
+                                TextButton(onClick = { onRemove(item.id) }, enabled = !saving, contentPadding = PaddingValues(horizontal = 3.dp)) { Text("×", color = Color(0xFFFFB59A)) }
                             }
                         }
                     }
@@ -591,6 +594,7 @@ private fun PosCartPanel(
             OutlinedTextField(
                 value = customerPhone,
                 onValueChange = onCustomerPhone,
+                enabled = !saving,
                 label = { Text("Customer mobile (optional)") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
@@ -604,7 +608,7 @@ private fun PosCartPanel(
             )
             if (loyaltyRewards > 0 && coffeeItem != null && customerPhone.length == 10) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = redeemFreeCoffee, onCheckedChange = onRedeem, colors = CheckboxDefaults.colors(checkedColor = PosMustard, checkmarkColor = PosWalnut))
+                    Checkbox(checked = redeemFreeCoffee, onCheckedChange = onRedeem, enabled = !saving, colors = CheckboxDefaults.colors(checkedColor = PosMustard, checkmarkColor = PosWalnut))
                     Text("Add 1 free coffee reward · $loyaltyRewards available", color = PosIvory, style = MaterialTheme.typography.bodySmall)
                 }
             } else if (customerPhone.length == 10) {
@@ -613,15 +617,16 @@ private fun PosCartPanel(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Payment", color = PosIvory, fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(selected = payment == "CASH", onClick = { onPayment("CASH") }, label = { Text("Cash") })
-                    FilterChip(selected = payment == "UPI", onClick = { onPayment("UPI") }, label = { Text("UPI") })
-                    FilterChip(selected = payment == "SPLIT", onClick = { onPayment("SPLIT") }, label = { Text("Split") })
+                    FilterChip(selected = payment == "CASH", onClick = { onPayment("CASH") }, enabled = !saving, label = { Text("Cash") })
+                    FilterChip(selected = payment == "UPI", onClick = { onPayment("UPI") }, enabled = !saving, label = { Text("UPI") })
+                    FilterChip(selected = payment == "SPLIT", onClick = { onPayment("SPLIT") }, enabled = !saving, label = { Text("Split") })
                 }
             }
             if (payment == "SPLIT") {
                 OutlinedTextField(
                     value = cashPartInput,
                     onValueChange = onCashPartInput,
+                    enabled = !saving,
                     label = { Text("Cash portion ₹") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
