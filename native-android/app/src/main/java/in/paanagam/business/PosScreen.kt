@@ -256,6 +256,9 @@ fun PosScreen(db: PaanagamDatabase) {
                     coffeeItem = coffeeItem,
                     payment = payment,
                     onPayment = { payment = it },
+                    cashPartInput = cashPartInput,
+                    onCashPartInput = { cashPartInput = it.filter { ch -> ch.isDigit() || ch == '.' }.take(9) },
+                    upiRemainder = upiPartPaise,
                     activeShift = activeShift != null,
                     missingRecipes = missingRecipes,
                     saving = saving,
@@ -288,8 +291,8 @@ fun PosScreen(db: PaanagamDatabase) {
                         }.toMutableList()
                         if (redeemFreeCoffee && coffeeItem != null) lines.add(SaleLine(UUID.randomUUID().toString(), saleId, coffeeItem.id, coffeeItem.name, 1, 0L, 0L))
                         scope.launch {
-                            runCatching { db.dao().completeSale(Sale(saleId, System.currentTimeMillis(), total, payment, customerPhone = customerPhone), lines) }
-                                .onSuccess { cart = emptyMap(); customerPhone = ""; redeemFreeCoffee = false; loyaltyRewards = 0; message = "Bill saved successfully." }
+                            runCatching { db.dao().completeSale(Sale(saleId, System.currentTimeMillis(), total, payment, customerPhone = customerPhone, cashPaidPaise = cashPartPaise, upiPaidPaise = upiPartPaise), lines) }
+                                .onSuccess { cart = emptyMap(); customerPhone = ""; cashPartInput = ""; redeemFreeCoffee = false; loyaltyRewards = 0; message = "Bill saved successfully." }
                                 .onFailure { message = it.message ?: "Checkout failed. No sale was confirmed." }
                             saving = false
                         }
