@@ -27,6 +27,9 @@ fun SalesHistoryScreen(db: PaanagamDatabase) {
     var expandedSaleId by remember { mutableStateOf<String?>(null) }
     var selectedLines by remember { mutableStateOf<List<SaleLine>>(emptyList()) }
     var selectedCostPaise by remember { mutableStateOf<Long?>(null) }
+    var refundSaleId by remember { mutableStateOf<String?>(null) }
+    var refundReason by remember { mutableStateOf("Customer return") }
+    var message by remember { mutableStateOf("") }
     val todayStart = run {
         val calendar = java.util.Calendar.getInstance()
         calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
@@ -40,6 +43,34 @@ fun SalesHistoryScreen(db: PaanagamDatabase) {
     val formatter = remember { SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()) }
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (message.isNotBlank()) Text(message, color = HistoryGold)
+        refundSaleId?.let { id ->
+            val target = sales.firstOrNull { it.id == id }
+            AlertDialog(
+                onDismissRequest = { refundSaleId = null },
+                title = { Text("Refund full bill?") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("This reverses FIFO stock consumption and records the original cash / UPI split.")
+                        Text("Cash: ₹%.2f • UPI: ₹%.2f".format((target?.cashPaidPaise ?: 0L) / 100.0, (target?.upiPaidPaise ?: 0L) / 100.0))
+                        OutlinedTextField(refundReason, { refundReason = it }, label = { Text("Refund reason") }, modifier = Modifier.fillMaxWidth())
+                        Text("Cash refunds require an open cash shift. UPI refunds must also be reversed in the UPI app.", style = MaterialTheme.typography.bodySmall)
+                    }
+                },
+                confirmButton = {
+                    TextButton(enabled = target != null && refundReason.isNotBlank(), onClick = {
+                        val sale = target ?: return@TextButton
+                        refundSaleId = null
+                        scope.launch {
+                            runCatching { db.dao().refundCompletedSale(sale.id, refundReason, System.currentTimeMillis(), sale.cashPaidPaise, sale.upiPaidPaise) }
+                                .onSuccess { message = "Full refund recorded; stock and sale status reversed." }
+                                .onFailure { message = it.message ?: "Refund failed." }
+                        }
+                    }) { Text("Confirm refund") }
+                },
+                dismissButton = { TextButton(onClick = { refundSaleId = null }) { Text("Cancel") } }
+            )
+        }
         Text("Sales overview", color = HistoryGold, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SummaryCard("Today bills", todaySales.size.toString(), Modifier.weight(1f))
@@ -60,18 +91,23 @@ fun SalesHistoryScreen(db: PaanagamDatabase) {
                             Text("Cash ₹%.2f • UPI ₹%.2f".format(sale.cashPaidPaise / 100.0, sale.upiPaidPaise / 100.0), color = HistoryIvory, style = MaterialTheme.typography.labelSmall)
                             Text(formatter.format(Date(sale.createdAt)), color = HistoryIvory)
                             Text("Bill ${sale.id.take(8).uppercase(Locale.ROOT)} • ${sale.status} • ${sale.syncState}", color = HistoryIvory, style = MaterialTheme.typography.bodySmall)
-                            TextButton(onClick = {
-                                if (expandedSaleId == sale.id) {
-                                    expandedSaleId = null
-                                    selectedLines = emptyList()
-                                    selectedCostPaise = null
-                                } else {
-                                    expandedSaleId = sale.id
-                                    selectedLines = emptyList()
-                                    selectedCostPaise = null
-                                    scope.launch { selectedLines = db.dao().saleLines(sale.id); selectedCostPaise = db.dao().saleCost(sale.id)?.ingredientCostPaise ?: 0L }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                TextButton(onClick = {
+                                    if (expandedSaleId == sale.id) {
+                                        expandedSaleId = null
+                                        selectedLines = emptyList()
+                                        selectedCostPaise = null
+                                    } else {
+                                        expandedSaleId = sale.id
+                                        selectedLines = emptyList()
+                                        selectedCostPaise = null
+                                        scope.launch { selectedLines = db.dao().saleLines(sale.id); selectedCostPaise = db.dao().saleCost(sale.id)?.ingredientCostPaise ?: 0L }
+                                    }
+                                }) { Text(if (expandedSaleId == sale.id) "Hide items" else "View items", color = HistoryGold) }
+                                if (sale.status == "COMPLETED") {
+                                    TextButton(onClick = { refundSaleId = sale.id; refundReason = "Customer return" }) { Text("Refund", color = Color(0xFFFFB59A)) }
                                 }
-                            }) { Text(if (expandedSaleId == sale.id) "Hide items" else "View items", color = HistoryGold) }
+                            }
                             if (expandedSaleId == sale.id) {
                                 if (selectedCostPaise != null) {
                                     val cost = selectedCostPaise ?: 0L
