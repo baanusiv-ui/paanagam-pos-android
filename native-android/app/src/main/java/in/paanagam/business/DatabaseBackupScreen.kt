@@ -60,7 +60,7 @@ private object PaanagamDatabaseBackup {
                 output.use { PortableBackupCrypto.encrypt(input, it, passphrase) }
             }
         } finally {
-            passphrase.fill('\\u0000')
+            passphrase.fill('\u0000')
         }
     }
 
