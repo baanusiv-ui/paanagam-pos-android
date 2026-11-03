@@ -418,7 +418,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         require(lines.isNotEmpty() && lines.size == lots.size)
         require(lines.all { line -> line.purchaseId == purchase.id && line.quantityBaseUnits > 0 && line.unitCostPaise >= 0 })
         require(lines.map { it.id }.distinct().size == lines.size && lines.map { it.lotId }.distinct().size == lines.size)
-        require(lines.zip(lots).all { (line, lot) -> line.ingredientId == lot.ingredientId && lot.location == "STORE" && lot.remainingBaseUnits == line.quantityBaseUnits && lot.receivedBaseUnits == line.quantityBaseUnits && lot.id == line.lotId && lot.unitCostPaise == line.unitCostPaise })
+        require(lines.zip(lots).all { (line, lot) -> line.ingredientId == lot.ingredientId && lot.location == "STORE" && lot.remainingBaseUnits == line.quantityBaseUnits && lot.qtyBaseUnits == line.quantityBaseUnits && lot.id == line.lotId && lot.unitCostPaise == line.unitCostPaise })
         insertPurchase(purchase)
         lines.zip(lots).forEach { (line, lot) ->
             require(line.quantityBaseUnits > 0 && line.unitCostPaise >= 0)
