@@ -10,6 +10,7 @@ import androidx.room.RoomDatabase
 import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
+import java.math.BigInteger
 
 @Dao
 interface PaanagamDao {
@@ -408,17 +409,17 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         val lots = fifoLots(ingredientId, location)
         require(lots.sumOf { it.remainingBaseUnits } >= quantity) { "Insufficient stock" }
         var left = quantity
-        var totalCost = 0L
+        var totalCostNumerator = BigInteger.ZERO
         lots.forEach { lot ->
             if (left > 0) {
                 val take = minOf(left, lot.remainingBaseUnits)
                 updateLotBalance(lot.id, lot.remainingBaseUnits - take)
-                totalCost = Math.addExact(totalCost, Math.multiplyExact(take, lot.unitCostPaise) / 1000L)
+                totalCostNumerator = totalCostNumerator.add(BigInteger.valueOf(take).multiply(BigInteger.valueOf(lot.unitCostPaise)))
                 insertStockMovement(StockMovement(UUID.randomUUID().toString(), ingredientId, lot.id, movementType, location, "", take, lot.unitCostPaise, referenceId, at))
                 left -= take
             }
         }
-        return totalCost
+        return totalCostNumerator.divide(BigInteger.valueOf(1000L)).longValueExact()
     }
 
     @Transaction
@@ -430,7 +431,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         require(powder.isCoffeePowder && powder.baseUnit == "g" && water.baseUnit == "ml" && decoction.baseUnit == "ml")
         val powderCost = consumeFifo(powderId, "KITCHEN", 250000L, batch.id, "PRODUCTION_CONSUMPTION", batch.producedAt)
         val waterCost = consumeFifo(waterId, "KITCHEN", 1100000L, batch.id, "PRODUCTION_CONSUMPTION", batch.producedAt)
-        val totalCost = powderCost + waterCost
+        val totalCost = Math.addExact(powderCost, waterCost)
         insertProductionBatch(batch)
         insertProductionInput(ProductionInput(UUID.randomUUID().toString(), batch.id, powderId, 250000L, powderCost))
         insertProductionInput(ProductionInput(UUID.randomUUID().toString(), batch.id, waterId, 1100000L, waterCost))
