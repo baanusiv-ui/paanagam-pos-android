@@ -95,3 +95,15 @@ data class CashShift(
     val notes: String = "",
     val status: String = "OPEN"
 )
+
+@Entity(tableName = "suppliers")
+data class Supplier(
+    @PrimaryKey val id: String,
+    val name: String,
+    val contactPerson: String = "",
+    val phone: String = "",
+    val gstin: String = "",
+    val notes: String = "",
+    val active: Boolean = true,
+    val createdAt: Long
+)
