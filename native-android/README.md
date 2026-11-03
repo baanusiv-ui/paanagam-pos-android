@@ -69,7 +69,9 @@ The current APK is a development build. Do not use it for live business transact
 
 - SQLCipher database encryption and safe migration of existing plaintext installations are not yet enabled. Do not represent the current database as encrypted.
 - Device binding uses the app-scoped Android ID and local admin approval after a restored database is opened on a different device. This is not a server-managed device registry and Android ID is not a MAC address.
-- SQLCipher encryption for the live Room database, encrypted portable backup/restore, admin re-authentication, PIN throttling/session timeout and device-level backup recovery tests remain required.
+- Persistent PIN throttling is implemented: five failed attempts trigger a 30-second lockout with exponential increases capped at 15 minutes; successful login clears the counter.
+- A five-minute background session timeout is implemented and returns staff to PIN login. Device-level verification of lockout timing, process recreation and session expiry remains required.
+- SQLCipher encryption for the live Room database, encrypted portable backup/restore, admin re-authentication and device-level backup recovery tests remain required.
 - Device-level tests for role navigation, database migration, FIFO accounting, sales rollback, backup/restore, offline operation, UPI and printer hardware remain required.
 
 
