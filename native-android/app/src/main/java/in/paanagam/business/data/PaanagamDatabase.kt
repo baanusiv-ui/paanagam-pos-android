@@ -3,6 +3,7 @@ package `in`.paanagam.business.data
 import androidx.room.Database
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.Update
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RoomDatabase
@@ -12,6 +13,43 @@ import java.util.UUID
 
 @Dao
 interface PaanagamDao {
+
+    @Query("SELECT * FROM cash_shifts WHERE status = 'OPEN' ORDER BY openedAt DESC LIMIT 1")
+    fun activeCashShift(): Flow<CashShift?>
+    @Query("SELECT * FROM cash_shifts ORDER BY openedAt DESC")
+    fun cashShifts(): Flow<List<CashShift>>
+    @Query("SELECT * FROM cash_shifts WHERE status = 'OPEN' ORDER BY openedAt DESC LIMIT 1")
+    suspend fun getOpenCashShift(): CashShift?
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertCashShift(shift: CashShift)
+    @Update
+    suspend fun updateCashShift(shift: CashShift)
+    @Query("SELECT COALESCE(SUM(totalPaise), 0) FROM sales WHERE paymentMethod = 'CASH' AND status = 'COMPLETED' AND createdAt >= :from AND createdAt <= :to")
+    suspend fun cashSalesTotal(from: Long, to: Long): Long
+    @Transaction
+    suspend fun openCashShift(shift: CashShift) {
+        require(shift.openingFloatPaise >= 0)
+        require(getOpenCashShift() == null) { "A cash shift is already open. Close it before starting another." }
+        insertCashShift(shift)
+    }
+    @Transaction
+    suspend fun closeCashShift(countedCashPaise: Long, notes: String, closedAt: Long): CashShift {
+        require(countedCashPaise >= 0)
+        val shift = getOpenCashShift() ?: error("No open cash shift.")
+        val cashSales = cashSalesTotal(shift.openedAt, closedAt)
+        val expected = shift.openingFloatPaise + cashSales
+        val closed = shift.copy(
+            closedAt = closedAt,
+            expectedCashPaise = expected,
+            countedCashPaise = countedCashPaise,
+            variancePaise = countedCashPaise - expected,
+            notes = notes,
+            status = "CLOSED"
+        )
+        updateCashShift(closed)
+        return closed
+    }
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertStockReconciliation(record: StockReconciliation)
     @Query("SELECT * FROM stock_reconciliations ORDER BY reconciledAt DESC")
@@ -264,7 +302,7 @@ interface PaanagamDao {
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class], version = 11, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class], version = 12, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
