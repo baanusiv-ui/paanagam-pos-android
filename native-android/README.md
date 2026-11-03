@@ -50,6 +50,7 @@ The current APK is a development build. Do not use it for live business transact
 - First launch creates the local Admin account with a 4–8 digit PIN.
 - Admin creates Manager and Cashier accounts and can reset PINs.
 - PINs are stored as salted PBKDF2-HMAC-SHA256 hashes (120,000 iterations), not plaintext.
+- Staff login now persists failed-attempt counters per staff account. Five incorrect PIN attempts trigger a 30-second lockout, with exponential increases up to 15 minutes; a successful login clears the lockout state.
 - Admin can deactivate and reactivate staff accounts.
 - Admin has full module access; Manager is restricted from staff administration and selected configuration modules; Cashier is limited to Dashboard, POS, Orders and Sales History.
 - Staff records are local to this device. There is no cloud account sync or remote recovery yet.
