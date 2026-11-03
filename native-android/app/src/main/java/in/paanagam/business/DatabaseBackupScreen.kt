@@ -94,7 +94,7 @@ private object PaanagamDatabaseBackup {
             val version = sqlite.rawQuery("PRAGMA user_version", null).use { cursor ->
                 if (cursor.moveToFirst()) cursor.getInt(0) else 0
             }
-            require(version in 1..25) { "Unsupported backup database version: $version." }
+            require(version in 1..26) { "Unsupported backup database version: $version." }
             val tables = mutableSetOf<String>()
             sqlite.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", null).use { cursor ->
                 while (cursor.moveToNext()) tables.add(cursor.getString(0))
