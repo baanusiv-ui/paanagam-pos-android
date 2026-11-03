@@ -29,6 +29,10 @@ fun CashShiftScreen(db: PaanagamDatabase) {
     var notes by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var movementType by remember { mutableStateOf("CASH_IN") }
+    var movementAmount by remember { mutableStateOf("") }
+    var movementNote by remember { mutableStateOf("") }
+    val movements by remember(active?.id) { if (active != null) db.dao().cashMovements(active!!.id).collectAsState(initial = emptyList()) else mutableStateOf(emptyList()) }
     val money: (String) -> Long? = { value -> value.toDoubleOrNull()?.takeIf { it >= 0 }?.let { (it * 100).toLong() } }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Cash shift control", color = Color(0xFF16845B), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -53,6 +57,26 @@ fun CashShiftScreen(db: PaanagamDatabase) {
                     Text("Opening float: ₹%.2f".format(active!!.openingFloatPaise / 100.0), color = Color(0xFF263A32))
                 }
             }
+            Text("Cash drawer adjustments", fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("CASH_IN", "CASH_OUT", "REFUND", "WITHDRAWAL").forEach { type ->
+                    FilterChip(selected = movementType == type, onClick = { movementType = type }, label = { Text(type.replace("_", " ")) })
+                }
+            }
+            OutlinedTextField(movementAmount, { movementAmount = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Amount ₹") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(movementNote, { movementNote = it }, label = { Text("Reason / reference") }, modifier = Modifier.fillMaxWidth())
+            Button(enabled = !busy && active != null && money(movementAmount)?.let { it > 0 } == true && movementNote.isNotBlank(), onClick = {
+                val amount = money(movementAmount) ?: return@Button
+                val shiftId = active?.id ?: return@Button
+                busy = true
+                scope.launch {
+                    runCatching { db.dao().recordCashMovement(in.paanagam.business.data.CashMovement(UUID.randomUUID().toString(), shiftId, movementType, amount, movementNote.trim(), System.currentTimeMillis())) }
+                        .onSuccess { movementAmount = ""; movementNote = ""; message = "Cash movement recorded." }
+                        .onFailure { message = it.message ?: "Could not record cash movement." }
+                    busy = false
+                }
+            }, modifier = Modifier.fillMaxWidth()) { Text("Record cash movement") }
+            movements.forEach { movement -> Text("${movement.type.replace("_", " ")} • ₹%.2f • ${movement.note}".format(movement.amountPaise / 100.0), color = Color(0xFF65736B), style = MaterialTheme.typography.bodySmall) }
             OutlinedTextField(counted, { counted = it }, label = { Text("Actual cash counted (₹)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(notes, { notes = it }, label = { Text("Closing notes (optional)") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
             Button(enabled = !busy && money(counted) != null, onClick = {
