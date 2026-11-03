@@ -219,13 +219,21 @@ private val MIGRATION_25_26 = object : Migration(25, 26) {
     }
 }
 
+private val MIGRATION_26_27 = object : Migration(26, 27) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS cctv_audit_events (id TEXT NOT NULL PRIMARY KEY, saleId TEXT NOT NULL, eventType TEXT NOT NULL, reason TEXT NOT NULL, amountPaise INTEGER NOT NULL, cashierId TEXT NOT NULL, cashierName TEXT NOT NULL, createdAt INTEGER NOT NULL, cameraBookmarkStatus TEXT NOT NULL, clipReference TEXT NOT NULL)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_cctv_audit_events_createdAt ON cctv_audit_events(createdAt)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_cctv_audit_events_saleId ON cctv_audit_events(saleId)")
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
             ?: error("Android device identifier is unavailable.")
-        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26).build()
+        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27).build()
         val liveFile = getDatabasePath("paanagam-local.db")
         val recoveryFile = getDatabasePath("paanagam-before-restore.db")
         try {
@@ -248,7 +256,7 @@ private val modules = listOf(
     "Purchases","Store → Kitchen","Production","Kitchen Stock","Next-Day Planning","Kitchen KDS","Operations Control",
     "Cash Shift","Wastage","Customers","Food Cost","Finance & P&L","Reports","GST Calculator","Marketing Hub",
     "Marketing Automation","Automation Hub","WhatsApp Settings","Business Planner","Stock Reconciliation","Sales Reconciliation","Suppliers",
-    "Staff & HR","Safety & FSSAI","Equipment","SOP Library","Data Backup"
+    "Staff & HR","Safety & FSSAI","Equipment","SOP Library","Data Backup", "CCTV & Audit"
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -375,7 +383,8 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, onRecreate: () 
                     else -> {
                     when (selected) {
                         "Dashboard" -> DashboardScreen(db, onNavigate = { selected = it })
-                        "Sales History" -> SalesHistoryScreen(db)
+                        "Sales History" -> SalesHistoryScreen(db, activeStaff!!)
+                        "CCTV & Audit" -> CctvScreen(db, activeStaff!!) 
                         "POS" -> PosScreen(db)
                         "Menu" -> MenuManagementScreen(db)
                         "Recipes & BOM / SOP" -> RecipeScreen(db)
@@ -403,7 +412,7 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, onRecreate: () 
     }
 }
 
-private val ADMIN_ONLY_MODULES = setOf("Staff & HR", "WhatsApp Settings", "Data Backup")
+private val ADMIN_ONLY_MODULES = setOf("Staff & HR", "WhatsApp Settings", "Data Backup", "CCTV & Audit")
 private val ADMIN_DATA_MODULES = setOf("Inventory", "Purchases", "Store → Kitchen", "Kitchen Stock", "Sales History", "Reports", "Food Cost", "Finance & P&L", "Stock Reconciliation", "Sales Reconciliation", "Suppliers")
 private val MANAGER_DEFAULT_MODULES = modules.filterNot { it in ADMIN_ONLY_MODULES + setOf("Business Planner", "Marketing Automation", "Automation Hub") }.toSet()
 private val CASHIER_DEFAULT_MODULES = setOf("Dashboard", "POS", "Orders", "Sales History", "Cash Shift")
