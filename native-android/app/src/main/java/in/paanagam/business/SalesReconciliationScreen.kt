@@ -19,6 +19,8 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 import java.time.LocalDate
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 @Composable
 fun SalesReconciliationScreen(db: PaanagamDatabase) {
@@ -35,14 +37,12 @@ fun SalesReconciliationScreen(db: PaanagamDatabase) {
     val daySales = sales.filter { it.status == "COMPLETED" && dateFormat.format(Date(it.createdAt)) == businessDate }
     val posCash = daySales.sumOf { it.cashPaidPaise }
     val posUpi = daySales.sumOf { it.upiPaidPaise }
-    val receivedPaise = ((upiReceived.toDoubleOrNull() ?: 0.0) * 100.0).toLong()
-    val countedPaise = ((cashCounted.toDoubleOrNull() ?: 0.0) * 100.0).toLong()
-    val upiVariance = receivedPaise - posUpi
-    val cashVariance = countedPaise - posCash
+    val receivedPaise = parseRupeesToPaise(upiReceived)
+    val countedPaise = parseRupeesToPaise(cashCounted)
+    val upiVariance = (receivedPaise ?: 0L) - posUpi
+    val cashVariance = (countedPaise ?: 0L) - posCash
     val validDate = runCatching { LocalDate.parse(businessDate); true }.getOrDefault(false)
-    val upiValue = upiReceived.toDoubleOrNull()
-    val cashValue = cashCounted.toDoubleOrNull()
-    val validInputs = upiReceived.isNotBlank() && cashCounted.isNotBlank() && upiValue != null && cashValue != null && upiValue.isFinite() && cashValue.isFinite() && upiValue >= 0.0 && cashValue >= 0.0
+    val validInputs = receivedPaise != null && countedPaise != null
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Daily settlement check", style = MaterialTheme.typography.titleLarge, color = Color(0xFF2B1B12), fontWeight = FontWeight.Bold)
@@ -95,7 +95,7 @@ fun SalesReconciliationScreen(db: PaanagamDatabase) {
                         scope.launch {
                             val entry = SalesReconciliation(
                                 UUID.randomUUID().toString(), businessDate, posCash, posUpi,
-                                receivedPaise, countedPaise, note.trim(), System.currentTimeMillis()
+                                receivedPaise ?: 0L, countedPaise ?: 0L, note.trim(), System.currentTimeMillis()
                             )
                             runCatching { db.dao().insertSalesReconciliation(entry) }
                                 .onSuccess {
@@ -127,4 +127,13 @@ fun SalesReconciliationScreen(db: PaanagamDatabase) {
             }
         }
     }
+}
+
+
+private fun parseRupeesToPaise(value: String): Long? = try {
+    val amount = BigDecimal(value)
+    if (amount.signum() < 0) null
+    else amount.setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValueExact()
+} catch (_: Exception) {
+    null
 }
