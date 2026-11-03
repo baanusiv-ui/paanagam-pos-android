@@ -1,5 +1,6 @@
 package `in`.paanagam.business
 
+import androidx.room.withTransaction
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -79,7 +80,7 @@ fun ComboPlanningScreen(db: PaanagamDatabase) {
             else scope.launch {
                 val id = UUID.randomUUID().toString()
                 val item = CatalogItem(id, comboName.trim(), "Combos", price, true)
-                runCatching { db.dao().saveCombo(item, draft.map { it.copy(comboItemId = id) }) }
+                runCatching { db.withTransaction { val dao = db.dao(); dao.saveCatalogItem(item); dao.replaceComboComponents(id, draft.map { it.copy(comboItemId = id) }) } }
                     .onSuccess { comboName = ""; comboPrice = ""; draft = emptyList(); message = "Combo saved. POS will calculate component recipes and FIFO stock at checkout." }
                     .onFailure { message = it.message ?: "Combo could not be saved." }
             }
