@@ -160,3 +160,6 @@ data class SaleRefund(
     val upiRefundPaise: Long,
     val reason: String
 )
+
+@Entity(tableName = "device_binding")
+data class DeviceBinding(@PrimaryKey val id: Int = 1, val androidId: String, val boundAt: Long, val approvedByStaffId: String)
