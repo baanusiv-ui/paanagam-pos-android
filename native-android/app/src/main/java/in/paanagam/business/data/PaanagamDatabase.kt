@@ -174,6 +174,8 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
 
     @Query("SELECT * FROM catalog_items WHERE active = 1 ORDER BY category, name")
     fun catalog(): Flow<List<CatalogItem>>
+    @Query("SELECT * FROM catalog_items WHERE id = :id")
+    suspend fun catalogItem(id: String): CatalogItem?
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveCatalog(items: List<CatalogItem>)
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -216,7 +218,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         val activeShift = getOpenCashShift()
         require(cashPortion == 0L || activeShift != null) { "Open a cash shift before accepting cash payments." }
         val saleWithShift = sale.copy(shiftId = if (cashPortion > 0) activeShift?.id else null, cashPaidPaise = cashPortion, upiPaidPaise = upiPortion)
-        val rewardLines = lines.filter { it.itemName.contains("coffee", ignoreCase = true) && it.unitPricePaise == 0L }
+        val rewardLines = lines.filter { catalogItem(it.itemId)?.isCoffee == true && it.unitPricePaise == 0L }
         require(rewardLines.size <= 1 && rewardLines.all { it.quantity == 1 }) { "Only one free coffee can be redeemed per bill." }
         val loyaltyBefore = if (rewardLines.isNotEmpty()) {
             require(sale.customerPhone.matches(Regex("[0-9]{10}"))) { "Enter the customer's 10-digit mobile number to redeem." }
@@ -257,7 +259,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         recordSaleLines(lines)
         insertKitchenTicket(KitchenTicket(sale.id, "NEW", sale.createdAt, sale.createdAt))
         saveSaleCost(SaleCost(sale.id, totalIngredientCost))
-        val paidCoffeeCount = lines.filter { it.itemName.contains("coffee", ignoreCase = true) && it.unitPricePaise > 0L }.sumOf { it.quantity }
+        val paidCoffeeCount = lines.filter { catalogItem(it.itemId)?.isCoffee == true && it.unitPricePaise > 0L }.sumOf { it.quantity }
         if (loyaltyBefore != null) {
             saveLoyaltyAccount(loyaltyBefore.copy(
                 freeCoffeesAvailable = loyaltyBefore.freeCoffeesAvailable - 1,
