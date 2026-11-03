@@ -14,6 +14,15 @@ import java.util.UUID
 @Dao
 interface PaanagamDao {
 
+    @Query("SELECT * FROM suppliers ORDER BY active DESC, name")
+    fun suppliers(): Flow<List<Supplier>>
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertSupplier(supplier: Supplier)
+    @Update
+    suspend fun updateSupplier(supplier: Supplier)
+    @Query("SELECT * FROM suppliers WHERE id = :id")
+    suspend fun supplier(id: String): Supplier?
+
     @Query("SELECT * FROM cash_shifts WHERE status = 'OPEN' ORDER BY openedAt DESC LIMIT 1")
     fun activeCashShift(): Flow<CashShift?>
     @Query("SELECT * FROM cash_shifts ORDER BY openedAt DESC")
@@ -305,7 +314,7 @@ interface PaanagamDao {
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class], version = 12, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, Supplier::class], version = 14, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
