@@ -209,7 +209,7 @@ fun PosScreen(db: PaanagamDatabase) {
                         }
                         scope.launch {
                             runCatching { db.dao().completeSale(Sale(saleId, System.currentTimeMillis(), total, payment, customerPhone = customerPhone, cashPaidPaise = cashPartPaise, upiPaidPaise = upiPartPaise), lines) }
-                                .onSuccess { cart = emptyMap(); customerPhone = ""; redeemFreeCoffee = false; loyaltyRewards = 0; message = "Bill saved successfully." }
+                                .onSuccess { cart = emptyMap(); customerPhone = ""; cashPartInput = ""; redeemFreeCoffee = false; loyaltyRewards = 0; message = "Bill saved successfully." }
                                 .onFailure { message = it.message ?: "Checkout failed. No sale was confirmed." }
                             saving = false
                         }
@@ -229,6 +229,8 @@ fun PosScreen(db: PaanagamDatabase) {
                     onAdd = { item -> cart = cart + (item.id to (item to ((cart[item.id]?.second ?: 0) + 1))) },
                     showAddItem = showAddItem,
                     onToggleAdd = { showAddItem = !showAddItem },
+                    heldCount = heldOrders.size,
+                    onShowHeld = { showHeldOrders = true },
                     newName = newName, onNewName = { newName = it },
                     newCategory = newCategory, onNewCategory = { newCategory = it },
                     newPrice = newPrice, onNewPrice = { newPrice = it },
