@@ -23,11 +23,13 @@ private val InvPanel = Color(0xFF3A2519)
 @Composable
 fun InventoryScreen(db: PaanagamDatabase, mode: String) {
     val ingredients by db.dao().ingredients().collectAsState(initial = emptyList())
+    val suppliers by db.dao().suppliers().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var unit by remember { mutableStateOf("g") }
     var coffee by remember { mutableStateOf(false) }
     var supplier by remember { mutableStateOf("") }
+    var selectedSupplierId by remember { mutableStateOf<String?>(null) }
     var invoice by remember { mutableStateOf("") }
     var qty by remember { mutableStateOf("") }
     var cost by remember { mutableStateOf("") }
@@ -110,7 +112,18 @@ fun InventoryScreen(db: PaanagamDatabase, mode: String) {
                                 }
                             }
                         }
-                        OutlinedTextField(supplier, { supplier = it }, label = { Text("Supplier") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                        if (suppliers.isNotEmpty()) {
+                            Text("Choose saved supplier", color = InvIvory)
+                            LazyColumn(Modifier.heightIn(max = 90.dp)) {
+                                items(suppliers.filter { it.active }, key = { it.id }) { saved ->
+                                    Row(Modifier.fillMaxWidth().clickable { selectedSupplierId = saved.id; supplier = saved.name }.padding(4.dp)) {
+                                        RadioButton(selected = selectedSupplierId == saved.id, onClick = { selectedSupplierId = saved.id; supplier = saved.name })
+                                        Text(saved.name, color = InvIvory, modifier = Modifier.padding(top = 12.dp))
+                                    }
+                                }
+                            }
+                        }
+                        OutlinedTextField(supplier, { supplier = it; selectedSupplierId = suppliers.firstOrNull { saved -> saved.name.equals(it.trim(), true) }?.id }, label = { Text("Supplier name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                         OutlinedTextField(invoice, { invoice = it }, label = { Text("Invoice number (optional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                         OutlinedTextField(qty, { qty = it }, label = { Text("Quantity in base units (decimals allowed)") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
                         OutlinedTextField(cost, { cost = it }, label = { Text("Cost per base unit (₹)") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
@@ -126,11 +139,11 @@ fun InventoryScreen(db: PaanagamDatabase, mode: String) {
                                 val unitCost = (c * 100.0).toLong()
                                 val total = quantity * unitCost / 1000L
                                 val now = System.currentTimeMillis()
-                                val purchase = Purchase(purchaseId, supplier.trim(), invoice.trim(), now, total)
+                                val purchase = Purchase(purchaseId, supplier.trim(), invoice.trim(), now, total, supplierId = selectedSupplierId)
                                 val line = PurchaseLine(UUID.randomUUID().toString(), purchaseId, item.id, quantity, unitCost, total, lotId)
                                 val lot = StockLot(lotId, item.id, "STORE", now, quantity, quantity, item.baseUnit, unitCost)
                                 runCatching { db.dao().receivePurchase(purchase, listOf(line), listOf(lot)) }
-                                    .onSuccess { supplier = ""; invoice = ""; qty = ""; cost = ""; message = "Purchase received into Store" }
+                                    .onSuccess { supplier = ""; selectedSupplierId = null; invoice = ""; qty = ""; cost = ""; message = "Purchase received into Store" }
                                     .onFailure { message = it.message ?: "Purchase could not be saved" }
                             }
                         }) { Text("Receive purchase") }
