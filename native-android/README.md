@@ -125,3 +125,14 @@ Required migration invariants before enabling SQLCipher:
 6. Test new install, existing install, empty database, corrupted database, wrong key, interrupted conversion, insufficient storage, restore to another device, and rollback. Include sales, sale lines, FIFO lots/movements, staff, cash shifts, refunds, loyalty and CCTV audit data in preservation checks.
 
 Until these gates pass, retain the existing Room open path and prominently warn that backups contain sensitive unencrypted data.
+
+
+## Portable backup encryption (0.2.10 work in progress)
+
+- Exported portable backups now use a versioned AES-256-GCM authenticated-encryption envelope.
+- A 256-bit key is derived from a user-held passphrase with PBKDF2-HMAC-SHA256 (310,000 iterations), a random 16-byte salt and a random 12-byte GCM nonce.
+- Restore authenticates/decrypts into a staging file, then checks SQLite integrity, Room schema version and required Paanagam tables before swapping it into place.
+- Passphrases are not persisted. Losing the passphrase means the encrypted backup cannot be recovered.
+- JVM tests cover round-trip recovery, wrong passphrases, ciphertext tampering and minimum passphrase length.
+- This protects portable backup files only. The live Room database is still plaintext until the separate SQLCipher migration is implemented and validated.
+- Existing raw .db backups from earlier builds are not encrypted-format backups; retain the old app build and the original backup until legacy restore compatibility is explicitly validated. Do not delete older backup copies.
