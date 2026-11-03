@@ -64,16 +64,16 @@ fun StockReconciliationScreen(db: PaanagamDatabase) {
                     Text("System balance: %.3f %s".format(systemQty / 1000.0, item?.baseUnit ?: ""), color = Color(0xFF263A32), fontWeight = FontWeight.SemiBold)
                     OutlinedTextField(physical, { physical = it.filter { c -> c.isDigit() || c == '.' }.take(14) }, label = { Text("Physical count (${item?.baseUnit ?: "unit"})") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
                     Text("Variance: %+.3f %s".format(variance / 1000.0, item?.baseUnit ?: ""), color = if (variance == 0L) Color(0xFF16845B) else Color(0xFFC26A27), fontWeight = FontWeight.Bold)
-                    if (item?.isCoffeePowder == true && !coffeeCountValid) Text("Coffee powder physical count must be in 250 g multiples.", color = Color(0xFFC26A27))
+                    if (item?.isCoffeePowder == true && !coffeeAdjustmentValid) Text("Coffee powder stock reductions must be in 250 g multiples. Physical counts may be any accurate quantity.", color = Color(0xFFC26A27))
                     if (variance > 0) {
                         OutlinedTextField(unitCost, { unitCost = it.filter { c -> c.isDigit() || c == '.' }.take(12) }, label = { Text("Cost per ${item?.baseUnit ?: "unit"} (₹) for added stock") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
                         Text("For a stock gain, enter its unit cost so FIFO valuation is not silently set to zero.", color = Color(0xFF718078), style = MaterialTheme.typography.labelSmall)
                     }
                     OutlinedTextField(note, { note = it }, label = { Text("Reason / count reference") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
                     val adjustmentCost = runCatching { BigDecimal(unitCost).movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValueExact() }.getOrNull()
-                    val coffeeCountValid = item?.isCoffeePowder != true || (item.baseUnit == "g" && countedBase != null && countedBase % 250000L == 0L)
+                    val coffeeAdjustmentValid = item?.isCoffeePowder != true || variance >= 0 || (item.baseUnit == "g" && variance % 250000L == 0L)
                     Button(
-                        enabled = item != null && countedBase != null && countedBase >= 0 && coffeeCountValid && (variance <= 0 || (adjustmentCost != null && adjustmentCost >= 0)),
+                        enabled = item != null && countedBase != null && countedBase >= 0 && coffeeAdjustmentValid && (variance <= 0 || (adjustmentCost != null && adjustmentCost >= 0)),
                         onClick = {
                             val current = item
                             val physicalUnits = countedBase
