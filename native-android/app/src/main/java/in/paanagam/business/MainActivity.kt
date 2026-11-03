@@ -405,7 +405,7 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, onRecreate: () 
                     when (selected) {
                         "Dashboard" -> DashboardScreen(db, onNavigate = { selected = it })
                         "Sales History" -> SalesHistoryScreen(db, activeStaff!!)
-                        "CCTV & Audit" -> CctvScreen(db, activeStaff!!) 
+                        "CCTV & Audit" -> AdminReauthGate(activeStaff!!, "CCTV & Audit") { CctvScreen(db, activeStaff!!) }
                         "POS" -> PosScreen(db)
                         "Menu" -> MenuManagementScreen(db)
                         "Recipes & BOM / SOP" -> RecipeScreen(db)
@@ -413,7 +413,7 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, onRecreate: () 
                         "Inventory", "Purchases", "Store → Kitchen", "Kitchen Stock" -> InventoryScreen(db, selected)
                         "Production", "Wastage" -> ProductionScreen(db)
                         "WhatsApp Settings" -> WhatsAppSettingsScreen()
-                        "Staff & HR" -> StaffAdminScreen(db, activeStaff!!)
+                        "Staff & HR" -> AdminReauthGate(activeStaff!!, "Staff administration") { StaffAdminScreen(db, activeStaff!!) }
                         "Reports", "Food Cost", "Finance & P&L" -> ReportsScreen(db, selected)
                         "Customers" -> LoyaltyScreen(db)
                         "Stock Reconciliation" -> StockReconciliationScreen(db)
@@ -423,7 +423,7 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, onRecreate: () 
                         "Next-Day Planning" -> NextDayPlanningScreen(db)
                         "Combos" -> ComboPlanningScreen(db)
                         "Kitchen KDS" -> KitchenKdsScreen(db)
-                        "Data Backup" -> DatabaseBackupScreen(db, onRecreate)
+                        "Data Backup" -> AdminReauthGate(activeStaff!!, "Database backup and restore") { DatabaseBackupScreen(db, onRecreate) }
                         else -> OperationalModuleScreen(db, selected)
                     }
                     }
@@ -562,6 +562,47 @@ private fun StaffLoginScreen(db: PaanagamDatabase, onLogin: (StaffMember) -> Uni
             modifier = Modifier.fillMaxWidth()
         ) { Text(if (System.currentTimeMillis() < lockoutUntil) "Login locked" else "Login") }
         Text("Five failed attempts trigger a persistent, increasing lockout. Admin can reset the staff PIN.", color = Color(0xFF718078), style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun AdminReauthGate(staff: StaffMember, actionTitle: String, content: @Composable () -> Unit) {
+    var pin by remember(staff.id, actionTitle) { mutableStateOf("") }
+    var error by remember(staff.id, actionTitle) { mutableStateOf("") }
+    var verified by remember(staff.id, actionTitle) { mutableStateOf(false) }
+
+    if (verified && staff.role == "ADMIN") {
+        content()
+    } else {
+        Column(
+            Modifier.fillMaxWidth().padding(top = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Administrator verification", color = Gold, style = MaterialTheme.typography.titleLarge)
+            Text("Re-enter the Admin PIN to open $actionTitle.", color = Color(0xFF65736B))
+            OutlinedTextField(
+                value = pin,
+                onValueChange = { pin = it.filter(Char::isDigit).take(8) },
+                label = { Text("Admin PIN") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (error.isNotBlank()) Text(error, color = Color.Red)
+            Button(
+                onClick = {
+                    if (staff.role != "ADMIN" || !verifyPin(pin, staff.pinSalt, staff.pinHash)) {
+                        error = "Admin PIN verification failed."
+                        pin = ""
+                    } else {
+                        verified = true
+                        pin = ""
+                        error = ""
+                    }
+                },
+                enabled = pin.length in 4..8,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Verify and continue") }
+        }
     }
 }
 
