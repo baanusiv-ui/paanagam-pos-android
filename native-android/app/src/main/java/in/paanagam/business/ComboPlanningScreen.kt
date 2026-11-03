@@ -83,7 +83,7 @@ fun ComboPlanningScreen(db: PaanagamDatabase) {
             if (comboName.isBlank() || price == null || price <= 0 || draft.isEmpty()) message = "Enter combo name, valid price and at least one component."
             else {
                 val missing = draft.filter { part ->
-                    catalog.none { it.id == part.componentItemId && it.active } || db.dao().recipeLines(part.componentItemId).isEmpty()
+                    catalog.none { it.id == part.componentItemId && it.active } || allRecipes.none { it.menuItemId == part.componentItemId }
                 }
                 if (missing.isNotEmpty()) message = "Configure recipes for: " + missing.joinToString { it.componentName }
                 else scope.launch {
