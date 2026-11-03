@@ -18,6 +18,7 @@ import java.math.RoundingMode
 fun ComboPlanningScreen(db: PaanagamDatabase) {
     val catalog by db.dao().catalog().collectAsState(initial = emptyList())
     val ingredients by db.dao().ingredients().collectAsState(initial = emptyList())
+    val allRecipes by db.dao().allRecipeLines().collectAsState(initial = emptyList())
     val combos by db.dao().allComboComponents().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var comboName by remember { mutableStateOf("") }
