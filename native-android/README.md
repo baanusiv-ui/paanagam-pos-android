@@ -25,9 +25,9 @@ Run GitHub Actions workflow **Build Native Android APK**. The debug APK is uploa
 
 ## Remaining work before production use
 
-- Staff roles, authentication and permission enforcement.
+- Device-level acceptance tests for staff login, PIN reset/deactivation and role-based module access.
 - Printer integration and UPI QR/payment confirmation workflow.
-- Backup and restore, including tested recovery on a replacement device.
+- Device-level testing of the new offline database backup and restore flow, including recovery on a replacement device.
 - Detailed sales, stock, food-cost and profit reports.
 - Complete SOP authoring, approval, version history and staff checklist workflows.
 - Full validation of coffee-decoction production, FIFO stock transfers, wastage, purchase corrections and reconciliation.
@@ -53,3 +53,4 @@ The current APK is a development build. Do not use it for live business transact
 - Admin can deactivate and reactivate staff accounts.
 - Admin has full module access; Manager is restricted from staff administration and selected configuration modules; Cashier is limited to Dashboard, POS, Orders and Sales History.
 - Staff records are local to this device. There is no cloud account sync or remote recovery yet.
+- Admin-only offline backup and restore uses Android's document picker. Backups are SQLite-integrity checked and schema-version checked before restore; the current database is preserved until validation passes. Device-level recovery testing is still required.
