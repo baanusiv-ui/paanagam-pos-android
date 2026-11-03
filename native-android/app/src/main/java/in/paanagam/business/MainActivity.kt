@@ -261,9 +261,11 @@ class MainActivity : ComponentActivity() {
             .build()
         val liveFile = getDatabasePath("paanagam-local.db")
         val recoveryFile = getDatabasePath("paanagam-before-restore.db")
+        val migrationRecoveryFile = getDatabasePath("paanagam-local.db.plaintext-recovery")
         try {
             db.openHelper.writableDatabase
-            if (recoveryFile.exists()) recoveryFile.delete()
+            if (recoveryFile.exists()) check(recoveryFile.delete()) { "Could not remove the previous restore recovery file." }
+            if (migrationRecoveryFile.exists()) check(migrationRecoveryFile.delete()) { "Database opened, but the plaintext migration recovery file could not be removed. Retry app startup before using POS." }
         } catch (failure: Throwable) {
             db.close()
             if (recoveryFile.exists()) {
