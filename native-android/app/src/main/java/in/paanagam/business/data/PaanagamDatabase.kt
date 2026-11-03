@@ -14,7 +14,16 @@ import java.util.UUID
 @Dao
 interface PaanagamDao {
 
-    @Query("SELECT * FROM combo_components WHERE comboItemId = :comboItemId ORDER BY componentName")
+    @Query("SELECT * FROM kitchen_tickets ORDER BY createdAt ASC")
+fun kitchenTickets(): Flow<List<KitchenTicket>>
+@Insert(onConflict = OnConflictStrategy.ABORT)
+suspend fun insertKitchenTicket(ticket: KitchenTicket)
+@Query("UPDATE kitchen_tickets SET status = :status, updatedAt = :updatedAt WHERE saleId = :saleId")
+suspend fun updateKitchenTicketStatus(saleId: String, status: String, updatedAt: Long)
+@Query("SELECT * FROM kitchen_tickets WHERE saleId = :saleId")
+suspend fun kitchenTicket(saleId: String): KitchenTicket?
+
+@Query("SELECT * FROM combo_components WHERE comboItemId = :comboItemId ORDER BY componentName")
 suspend fun comboComponents(comboItemId: String): List<ComboComponent>
 @Query("SELECT * FROM combo_components ORDER BY comboItemId, componentName")
 fun allComboComponents(): Flow<List<ComboComponent>>
@@ -195,8 +204,9 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
             }
         }
         recordSale(saleWithShift)
-        saveSaleCost(SaleCost(sale.id, totalIngredientCost))
         recordSaleLines(lines)
+        insertKitchenTicket(KitchenTicket(sale.id, "NEW", sale.createdAt, sale.createdAt))
+        saveSaleCost(SaleCost(sale.id, totalIngredientCost))
         val paidCoffeeCount = lines.filter { it.itemName.contains("coffee", ignoreCase = true) && it.unitPricePaise > 0L }.sumOf { it.quantity }
         if (loyaltyBefore != null) {
             saveLoyaltyAccount(loyaltyBefore.copy(
@@ -354,7 +364,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, Supplier::class, NextDayPlan::class, ComboComponent::class], version = 17, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class], version = 18, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
