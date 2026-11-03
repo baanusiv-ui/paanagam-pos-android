@@ -257,13 +257,11 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                     message = message,
                     salesCount = sales.size,
                     onDecrease = { id, item, qty ->
-                        if (qty <= 1) {
-                            saving = true
-                            recordPreCheckoutAudit("CART_ITEM_VOID", "Removed ${item.name} before checkout", item.pricePaise) {
-                                cart = cart - id
-                                saving = false
-                            }
-                        } else cart = cart + (id to (item to qty - 1))
+                        saving = true
+                        recordPreCheckoutAudit("CART_ITEM_VOID", "Reduced ${item.name} quantity by 1 before checkout", item.pricePaise) {
+                            cart = if (qty <= 1) cart - id else cart + (id to (item to qty - 1))
+                            saving = false
+                        }
                     },
                     onIncrease = { id, item, qty -> cart = cart + (id to (item to qty + 1)) },
                     onRemove = { id ->
@@ -360,13 +358,11 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                     message = message,
                     salesCount = sales.size,
                     onDecrease = { id, item, qty ->
-                        if (qty <= 1) {
-                            saving = true
-                            recordPreCheckoutAudit("CART_ITEM_VOID", "Removed ${item.name} before checkout", item.pricePaise) {
-                                cart = cart - id
-                                saving = false
-                            }
-                        } else cart = cart + (id to (item to qty - 1))
+                        saving = true
+                        recordPreCheckoutAudit("CART_ITEM_VOID", "Reduced ${item.name} quantity by 1 before checkout", item.pricePaise) {
+                            cart = if (qty <= 1) cart - id else cart + (id to (item to qty - 1))
+                            saving = false
+                        }
                     },
                     onIncrease = { id, item, qty -> cart = cart + (id to (item to qty + 1)) },
                     onRemove = { id ->
