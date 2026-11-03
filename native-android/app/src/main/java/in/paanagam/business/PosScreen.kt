@@ -32,7 +32,7 @@ private val PosOrange = Color(0xFFE97832)
 private val PosMuted = Color(0xFF887766)
 
 @Composable
-fun PosScreen(db: PaanagamDatabase) {
+fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
     val catalog by db.dao().catalog().collectAsState(initial = emptyList())
     val sales by db.dao().sales().collectAsState(initial = emptyList())
     val heldOrders by db.dao().heldOrders().collectAsState(initial = emptyList())
@@ -52,6 +52,9 @@ fun PosScreen(db: PaanagamDatabase) {
     var message by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
     var showHeldOrders by remember { mutableStateOf(false) }
+    var showCancelDialog by remember { mutableStateOf(false) }
+    var cancelReason by remember { mutableStateOf("") }
+    val cartAuditSessionId = remember { UUID.randomUUID().toString() }
     var showAddItem by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
     var newCategory by remember { mutableStateOf("Beverages") }
@@ -86,6 +89,32 @@ fun PosScreen(db: PaanagamDatabase) {
         if (components.isEmpty()) recipeLines.none { it.menuItemId == item.id }
         else components.any { part -> recipeLines.none { it.menuItemId == part.componentItemId } }
     }
+    fun recordPreCheckoutAudit(eventType: String, reason: String, amountPaise: Long, onSaved: () -> Unit) {
+        scope.launch {
+            runCatching {
+                db.dao().insertCctvAuditEvent(
+                    CctvAuditEvent(
+                        UUID.randomUUID().toString(),
+                        "PRECHECKOUT-$cartAuditSessionId",
+                        eventType,
+                        reason.trim(),
+                        amountPaise,
+                        staff.id,
+                        staff.name,
+                        System.currentTimeMillis(),
+                        "LOCAL_BOOKMARK"
+                    )
+                )
+            }.onSuccess {
+                onSaved()
+            }.onFailure { error ->
+                saving = false
+                message = "Cancellation was not applied because its audit record could not be saved: " +
+                    (error.message ?: "database error")
+            }
+        }
+    }
+
     val canCheckout = cart.isNotEmpty() && !saving && missingRecipes.isEmpty() &&
         cashPartPaise in 0L..total && upiPartPaise >= 0L &&
         (payment != "SPLIT" || (cashPartPaise > 0L && upiPartPaise > 0L)) &&
@@ -130,6 +159,49 @@ fun PosScreen(db: PaanagamDatabase) {
                     }
                 },
                 confirmButton = { TextButton(onClick = { showHeldOrders = false }) { Text("Close") } }
+            )
+        }
+
+        if (showCancelDialog) {
+            AlertDialog(
+                onDismissRequest = { if (!saving) showCancelDialog = false },
+                title = { Text("Cancel current POS cart?") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("This cart has not been checked out. Enter a reason; the cashier, amount and camera-time bookmark will be saved to the audit log before the cart is cleared.")
+                        OutlinedTextField(
+                            value = cancelReason,
+                            onValueChange = { cancelReason = it },
+                            label = { Text("Cancellation reason") },
+                            placeholder = { Text("Customer changed order, duplicate entry, etc.") },
+                            minLines = 2,
+                            enabled = !saving,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = !saving && cancelReason.isNotBlank() && cart.isNotEmpty(),
+                        onClick = {
+                            saving = true
+                            recordPreCheckoutAudit("CART_VOID", cancelReason, total) {
+                                cart = emptyMap()
+                                redeemFreeCoffee = false
+                                customerPhone = ""
+                                cashPartInput = ""
+                                loyaltyRewards = 0
+                                cancelReason = ""
+                                showCancelDialog = false
+                                saving = false
+                                message = "Cart cancelled. POS audit bookmark saved."
+                            }
+                        }
+                    ) { Text(if (saving) "Saving…" else "Record & cancel") }
+                },
+                dismissButton = {
+                    TextButton(enabled = !saving, onClick = { showCancelDialog = false }) { Text("Keep cart") }
+                }
             )
         }
 
@@ -184,10 +256,27 @@ fun PosScreen(db: PaanagamDatabase) {
                     canCheckout = canCheckout,
                     message = message,
                     salesCount = sales.size,
-                    onDecrease = { id, item, qty -> cart = if (qty <= 1) cart - id else cart + (id to (item to qty - 1)) },
+                    onDecrease = { id, item, qty ->
+                        if (qty <= 1) {
+                            saving = true
+                            recordPreCheckoutAudit("CART_ITEM_VOID", "Removed ${item.name} before checkout", item.pricePaise) {
+                                cart = cart - id
+                                saving = false
+                            }
+                        } else cart = cart + (id to (item to qty - 1))
+                    },
                     onIncrease = { id, item, qty -> cart = cart + (id to (item to qty + 1)) },
-                    onRemove = { id -> cart = cart - id },
-                    onClear = { cart = emptyMap(); redeemFreeCoffee = false; message = "" },
+                    onRemove = { id ->
+                        val removed = cart[id]
+                        if (removed != null) {
+                            saving = true
+                            recordPreCheckoutAudit("CART_ITEM_VOID", "Removed ${removed.first.name} before checkout", removed.first.pricePaise * removed.second) {
+                                cart = cart - id
+                                saving = false
+                            }
+                        }
+                    },
+                    onClear = { cancelReason = ""; showCancelDialog = true },
                     onHold = {
                         val heldId = UUID.randomUUID().toString()
                         scope.launch {
@@ -270,10 +359,27 @@ fun PosScreen(db: PaanagamDatabase) {
                     canCheckout = canCheckout,
                     message = message,
                     salesCount = sales.size,
-                    onDecrease = { id, item, qty -> cart = if (qty <= 1) cart - id else cart + (id to (item to qty - 1)) },
+                    onDecrease = { id, item, qty ->
+                        if (qty <= 1) {
+                            saving = true
+                            recordPreCheckoutAudit("CART_ITEM_VOID", "Removed ${item.name} before checkout", item.pricePaise) {
+                                cart = cart - id
+                                saving = false
+                            }
+                        } else cart = cart + (id to (item to qty - 1))
+                    },
                     onIncrease = { id, item, qty -> cart = cart + (id to (item to qty + 1)) },
-                    onRemove = { id -> cart = cart - id },
-                    onClear = { cart = emptyMap(); redeemFreeCoffee = false; message = "" },
+                    onRemove = { id ->
+                        val removed = cart[id]
+                        if (removed != null) {
+                            saving = true
+                            recordPreCheckoutAudit("CART_ITEM_VOID", "Removed ${removed.first.name} before checkout", removed.first.pricePaise * removed.second) {
+                                cart = cart - id
+                                saving = false
+                            }
+                        }
+                    },
+                    onClear = { cancelReason = ""; showCancelDialog = true },
                     onHold = {
                         val heldId = UUID.randomUUID().toString()
                         scope.launch {
