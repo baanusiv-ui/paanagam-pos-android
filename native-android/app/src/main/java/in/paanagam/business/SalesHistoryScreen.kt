@@ -27,7 +27,7 @@ fun SalesHistoryScreen(db: PaanagamDatabase) {
     var expandedSaleId by remember { mutableStateOf<String?>(null) }
     var selectedLines by remember { mutableStateOf<List<SaleLine>>(emptyList()) }
     var selectedCostPaise by remember { mutableStateOf<Long?>(null) }
-    val todayStart = remember {
+    val todayStart = run {
         val calendar = java.util.Calendar.getInstance()
         calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
         calendar.set(java.util.Calendar.MINUTE, 0)
