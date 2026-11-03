@@ -254,7 +254,11 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
             ?: error("Android device identifier is unavailable.")
-        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27).build()
+        val databaseKey = PaanagamDatabaseSecurity.prepare(applicationContext)
+        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db")
+            .openHelperFactory(PaanagamDatabaseSecurity.roomOpenHelperFactory(databaseKey))
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27)
+            .build()
         val liveFile = getDatabasePath("paanagam-local.db")
         val recoveryFile = getDatabasePath("paanagam-before-restore.db")
         try {
@@ -268,7 +272,7 @@ class MainActivity : ComponentActivity() {
             }
             throw failure
         }
-        setContent { PaanagamApp(db, androidId) { recreate() } }
+        setContent { PaanagamApp(db, androidId, databaseKey) { recreate() } }
     }
 }
 
@@ -282,7 +286,7 @@ private val modules = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PaanagamApp(db: PaanagamDatabase, androidId: String, onRecreate: () -> Unit) {
+private fun PaanagamApp(db: PaanagamDatabase, androidId: String, databaseKey: ByteArray, onRecreate: () -> Unit) {
     var selected by remember { mutableStateOf("Dashboard") }
     var activeStaff by remember { mutableStateOf<StaffMember?>(null) }
     var firstStaffExists by remember { mutableStateOf<Boolean?>(null) }
@@ -423,7 +427,7 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, onRecreate: () 
                         "Next-Day Planning" -> NextDayPlanningScreen(db)
                         "Combos" -> ComboPlanningScreen(db)
                         "Kitchen KDS" -> KitchenKdsScreen(db)
-                        "Data Backup" -> AdminReauthGate(activeStaff!!, "Database backup and restore") { DatabaseBackupScreen(db, onRecreate) }
+                        "Data Backup" -> AdminReauthGate(activeStaff!!, "Database backup and restore") { DatabaseBackupScreen(db, databaseKey, onRecreate) }
                         else -> OperationalModuleScreen(db, selected)
                     }
                     }
