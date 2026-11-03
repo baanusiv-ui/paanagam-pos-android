@@ -105,6 +105,13 @@ private val MIGRATION_10_11 = object : Migration(10, 11) {
     }
 }
 
+
+private val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS cash_shifts (id TEXT NOT NULL PRIMARY KEY, openedAt INTEGER NOT NULL, openingFloatPaise INTEGER NOT NULL, closedAt INTEGER, expectedCashPaise INTEGER, countedCashPaise INTEGER, variancePaise INTEGER, notes TEXT NOT NULL, status TEXT NOT NULL)")
+    }
+}
+
 private val MIGRATION_9_10 = object : Migration(9, 10) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("CREATE TABLE IF NOT EXISTS stock_reconciliations (id TEXT NOT NULL PRIMARY KEY, ingredientId TEXT NOT NULL, ingredientName TEXT NOT NULL, location TEXT NOT NULL, systemQtyBaseUnits INTEGER NOT NULL, physicalQtyBaseUnits INTEGER NOT NULL, varianceBaseUnits INTEGER NOT NULL, adjustmentCostPaise INTEGER NOT NULL, note TEXT NOT NULL, reconciledAt INTEGER NOT NULL)")
@@ -114,7 +121,7 @@ private val MIGRATION_9_10 = object : Migration(9, 10) {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11).build()
+        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12).build()
         setContent { PaanagamApp(db) }
     }
 }
@@ -232,6 +239,7 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                         "Reports", "Food Cost", "Finance & P&L" -> ReportsScreen(db, selected)
                         "Customers" -> LoyaltyScreen(db)
                         "Stock Reconciliation" -> StockReconciliationScreen(db)
+                        "Cash Shift" -> CashShiftScreen(db)
                         else -> OperationalModuleScreen(db, selected)
                     }
                     }
