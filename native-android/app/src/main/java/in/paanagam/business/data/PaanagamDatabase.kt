@@ -113,7 +113,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     suspend fun insertCashShift(shift: CashShift)
     @Update
     suspend fun updateCashShift(shift: CashShift)
-    @Query("SELECT COALESCE(SUM(cashPaidPaise), 0) FROM sales WHERE status = 'COMPLETED' AND shiftId = :shiftId")
+    @Query("SELECT COALESCE(SUM(cashPaidPaise), 0) FROM sales WHERE status IN ('COMPLETED', 'REFUNDED') AND shiftId = :shiftId")
     suspend fun cashSalesTotal(shiftId: String): Long
     @Transaction
     suspend fun openCashShift(shift: CashShift) {
