@@ -10,7 +10,7 @@ data class CatalogItem(@PrimaryKey val id: String, val name: String, val categor
 data class Ingredient(@PrimaryKey val id: String, val name: String, val baseUnit: String, val isCoffeePowder: Boolean = false, val active: Boolean = true, val storeMinStockBaseUnits: Long = 0L, val kitchenMinStockBaseUnits: Long = 0L)
 
 @Entity(tableName = "purchases")
-data class Purchase(@PrimaryKey val id: String, val supplierName: String, val invoiceNumber: String, val purchasedAt: Long, val totalPaise: Long, val status: String = "RECEIVED")
+data class Purchase(@PrimaryKey val id: String, val supplierName: String, val invoiceNumber: String, val purchasedAt: Long, val totalPaise: Long, val status: String = "RECEIVED", val supplierId: String? = null)
 
 @Entity(tableName = "purchase_lines")
 data class PurchaseLine(@PrimaryKey val id: String, val purchaseId: String, val ingredientId: String, val quantityBaseUnits: Long, val unitCostPaise: Long, val lineTotalPaise: Long, val lotId: String)
