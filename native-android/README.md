@@ -109,23 +109,20 @@ Remaining audit items requiring additional work/device verification: partial ref
 - Lockout timing is centralized in `PinLockoutPolicy` and covered by JVM tests for threshold, exponential backoff, cap, deadline arithmetic and overflow.
 - CI has passed for the current Admin re-authentication implementation and its follow-up documentation commit. Device-level verification is still required.
 
-## Database encryption migration — safety gate
+## Live database encryption — implementation in progress
 
-The live Room database is still a plaintext SQLite database. Portable backup files are separately protected by the AES-256-GCM passphrase envelope described below. Do not describe the live database as encrypted.
+The development branch now wires Room to SQLCipher Android 4.20.0. The live database key is generated randomly, wrapped by an Android Keystore AES-256-GCM key, and the wrapped key alone is persisted in app-private preferences. Existing plaintext SQLite files are copied to a new encrypted temporary database using `sqlcipher_export()`; the temporary database is reopened with the key and checked for SQLCipher status, SQLite integrity and Room schema version before the file switch. A separate recovery filename is retained across the file-swap boundary so an interrupted switch can restore the original file.
 
-The SQLCipher Android Community Edition artifact is available from Maven Central and its upstream project documents Room 2 integration. Integration is deliberately not enabled until the existing plaintext database can be converted and recovered safely.
+Portable backups remain independent of the per-device database key. Backup export creates a temporary plaintext SQLite copy from the encrypted database, then encrypts it with the user's AES-256-GCM passphrase envelope. Restore decrypts and validates that portable SQLite file, re-encrypts it with the receiving device's Keystore-protected key, and only then replaces the live database. This preserves cross-device restore.
 
-Required migration invariants before enabling SQLCipher:
+The following are not yet production-verified:
+1. Android build and JVM unit-test result for the current SQLCipher integration.
+2. On-device migration of an existing Paanagam database with populated sales, sale lines, FIFO lots/movements, staff, cash shifts, refunds, loyalty and CCTV audit data.
+3. Process-kill tests at each migration/swap stage, low-storage handling, wrong-key handling, and recovery on a real Android device.
+4. Cross-device portable backup/restore and Room schema migration from older database versions.
+5. Confirmation that no plaintext temporary or recovery file remains after a successful conversion/backup operation. File deletion on flash storage cannot be represented as guaranteed physical secure erasure.
 
-1. Generate a cryptographically random database key and wrap it with an Android Keystore AES-GCM key; never hardcode or store the database key in preferences.
-2. Preserve the original plaintext database untouched while creating an encrypted temporary database. Never point the SQLCipher Room factory at the existing plaintext file.
-3. Validate the encrypted temporary database before switching: SQLCipher can reopen it with the wrapped key, integrity check passes, Room schema version is 27, and representative business tables retain their row counts.
-4. Make the swap atomic and restart-safe. A process kill, low-storage condition, wrong key or failed validation must leave the original database recoverable and must never trigger an empty-database fallback.
-5. Portable backups must use a separate user-held passphrase and authenticated encryption so they can be restored on a replacement device; a key protected only by the source device's Android Keystore is not a portable backup.
-6. Test new install, existing install, empty database, corrupted database, wrong key, interrupted conversion, insufficient storage, restore to another device, and rollback. Include sales, sale lines, FIFO lots/movements, staff, cash shifts, refunds, loyalty and CCTV audit data in preservation checks.
-
-Until these gates pass, retain the existing Room open path and prominently warn that the live on-device database is unencrypted. Portable encrypted backups require the user's separate passphrase.
-
+Do not merge this work to main or distribute it as a production release until CI and physical-device migration/restore acceptance tests pass. The debug build is not a substitute for those checks.
 
 ## Portable backup encryption (0.2.10 work in progress)
 
