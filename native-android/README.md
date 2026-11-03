@@ -66,8 +66,8 @@ The current APK is a development build. Do not use it for live business transact
 ## Security and production hardening still in progress
 
 - SQLCipher database encryption and safe migration of existing plaintext installations are not yet enabled. Do not represent the current database as encrypted.
-- Keystore-backed app/device identity and admin-authorized device transfer are not yet implemented.
-- Admin re-authentication before protected data access, audit logging, encrypted backup/restore and backup recovery testing remain required.
+- Device binding uses the app-scoped Android ID and local admin approval after a restored database is opened on a different device. This is not a server-managed device registry and Android ID is not a MAC address.
+- SQLCipher encryption for the live Room database, encrypted portable backup/restore, admin re-authentication, PIN throttling/session timeout and device-level backup recovery tests remain required.
 - Device-level tests for role navigation, database migration, FIFO accounting, sales rollback, backup/restore, offline operation, UPI and printer hardware remain required.
 
 
@@ -80,7 +80,7 @@ The current APK is a development build. Do not use it for live business transact
 - Cash shift expected drawer balance now includes opening float + cash sales + cash-in − cash-out/refunds/withdrawals. Every drawer adjustment requires a positive amount and reason and is tied to the currently open shift.
 - Room migration 23 → 24 creates the cash-movement ledger without deleting existing shift or sales data.
 
-Remaining audit items requiring additional work/device verification: auditable sale cancellation/refund with stock and payment reversals; fully configurable tax; real printer/UPI QR integrations; full operating-expense accounting; automated tests for FIFO rounding and all migrations; encrypted database and backup recovery; complete business workflows for placeholder operational modules. The app remains a local single-device POS; no multi-device sync is claimed.
+Remaining audit items requiring additional work/device verification: pre-completion POS cancellation/void audit; partial refunds; loyalty reversal on refund; configurable POS tax; real printer/UPI QR integrations; full statutory accounting; encrypted database and backup recovery; complete business workflows for placeholder operational modules. Full-bill refunds require an explicit stock disposition: only unopened, safe returns are restocked; served/opened/unsafe items are recorded as wastage. UPI reversal must still be performed in the UPI app. The app remains a local single-device POS; no multi-device sync is claimed.
 
 
 ## 360° CCTV and POS cancellation audit
@@ -88,7 +88,9 @@ Remaining audit items requiring additional work/device verification: auditable s
 - Added an administrator-only native CCTV screen with RTSP live playback using Android Media3.
 - Added pinch/drag and on-screen digital zoom controls (up to 5×) for the live preview.
 - Camera host, RTSP path, username and password are stored as AES-GCM ciphertext using an Android Keystore key; camera credentials are not stored in Room or printed to logs.
-- Added Room schema 27 and a cancellation/refund audit event table. The refund transaction writes its CCTV timestamp bookmark, bill ID, refund reason, amount and signed-in staff identity atomically with the existing stock/payment refund reversal.
+- Added Room schema 27 and a cancellation/refund audit event table. Completed-sale refunds write a CCTV timestamp bookmark, bill ID, refund reason, amount and signed-in staff identity in the same Room transaction as payment and stock disposition records.
+- Full-bill refund now requires an explicit stock disposition. Safe, unopened returned stock is restored to its original FIFO lot; served, opened or unsafe food remains consumed and is recorded as wastage. Refund remains atomic with cash ledger, sale status, KDS cancellation and CCTV bookmark.
 - Added local-network permissions and restricted the CCTV module to Admin.
 - Device dependency: generic RTSP is a video transport, not a universal record/clip-control API. This build creates a durable local timestamp bookmark; automatic camera-side clip retrieval/recording trigger and ONVIF PTZ/fisheye dewarping require the selected camera/NVR's supported ONVIF recording profile or vendor API. Verify the exact model before enabling that claim in production.
+- Pre-completion POS cart cancellation/void is not yet linked to a durable CCTV audit event. The current bookmark workflow covers completed-sale refunds only.
 - The new viewer and audit log still require Android build verification and physical camera testing. Do not treat this feature as production CCTV evidence until a real camera stream and clip retrieval are validated.
