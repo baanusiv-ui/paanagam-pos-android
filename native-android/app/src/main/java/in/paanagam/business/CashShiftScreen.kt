@@ -32,7 +32,7 @@ fun CashShiftScreen(db: PaanagamDatabase) {
     var movementType by remember { mutableStateOf("CASH_IN") }
     var movementAmount by remember { mutableStateOf("") }
     var movementNote by remember { mutableStateOf("") }
-    val movements by remember(active?.id) { if (active != null) db.dao().cashMovements(active!!.id).collectAsState(initial = emptyList()) else mutableStateOf(emptyList()) }
+    val movements by db.dao().cashMovements(active?.id ?: "").collectAsState(initial = emptyList())
     val money: (String) -> Long? = { value -> value.toDoubleOrNull()?.takeIf { it >= 0 }?.let { (it * 100).toLong() } }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Cash shift control", color = Color(0xFF16845B), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
