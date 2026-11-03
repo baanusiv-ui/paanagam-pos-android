@@ -98,10 +98,16 @@ private val MIGRATION_8_9 = object : Migration(8, 9) {
     }
 }
 
+private val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS stock_reconciliations (id TEXT NOT NULL PRIMARY KEY, ingredientId TEXT NOT NULL, ingredientName TEXT NOT NULL, location TEXT NOT NULL, systemQtyBaseUnits INTEGER NOT NULL, physicalQtyBaseUnits INTEGER NOT NULL, varianceBaseUnits INTEGER NOT NULL, adjustmentCostPaise INTEGER NOT NULL, note TEXT NOT NULL, reconciledAt INTEGER NOT NULL)")
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build()
+        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10).build()
         setContent { PaanagamApp(db) }
     }
 }
@@ -217,6 +223,7 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                         "WhatsApp Settings" -> WhatsAppSettingsScreen()
                         "Staff & HR" -> StaffAdminScreen(db, activeStaff!!)
                         "Reports", "Food Cost", "Finance & P&L" -> ReportsScreen(db, selected)
+                        "Stock Reconciliation" -> StockReconciliationScreen(db)
                         else -> OperationalModuleScreen(db, selected)
                     }
                     }
