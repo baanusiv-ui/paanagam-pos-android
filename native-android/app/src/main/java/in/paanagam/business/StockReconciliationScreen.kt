@@ -17,6 +17,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 @Composable
 fun StockReconciliationScreen(db: PaanagamDatabase) {
@@ -37,8 +39,7 @@ fun StockReconciliationScreen(db: PaanagamDatabase) {
     LaunchedEffect(ingredients) {
         if (selectedId.isBlank() && ingredients.isNotEmpty()) selectedId = ingredients.first().id
     }
-    val counted = physical.toDoubleOrNull()
-    val countedBase = counted?.let { (it * 1000.0).toLong() }
+    val countedBase = runCatching { BigDecimal(physical).movePointRight(3).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
     val variance = if (countedBase != null) countedBase - systemQty else 0L
     val fmt = remember { SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()) }
 
@@ -63,13 +64,16 @@ fun StockReconciliationScreen(db: PaanagamDatabase) {
                     Text("System balance: %.3f %s".format(systemQty / 1000.0, item?.baseUnit ?: ""), color = Color(0xFF263A32), fontWeight = FontWeight.SemiBold)
                     OutlinedTextField(physical, { physical = it.filter { c -> c.isDigit() || c == '.' }.take(14) }, label = { Text("Physical count (${item?.baseUnit ?: "unit"})") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
                     Text("Variance: %+.3f %s".format(variance / 1000.0, item?.baseUnit ?: ""), color = if (variance == 0L) Color(0xFF16845B) else Color(0xFFC26A27), fontWeight = FontWeight.Bold)
+                    if (item?.isCoffeePowder == true && !coffeeCountValid) Text("Coffee powder physical count must be in 250 g multiples.", color = Color(0xFFC26A27))
                     if (variance > 0) {
                         OutlinedTextField(unitCost, { unitCost = it.filter { c -> c.isDigit() || c == '.' }.take(12) }, label = { Text("Cost per ${item?.baseUnit ?: "unit"} (₹) for added stock") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
                         Text("For a stock gain, enter its unit cost so FIFO valuation is not silently set to zero.", color = Color(0xFF718078), style = MaterialTheme.typography.labelSmall)
                     }
                     OutlinedTextField(note, { note = it }, label = { Text("Reason / count reference") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                    val adjustmentCost = runCatching { BigDecimal(unitCost).movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValueExact() }.getOrNull()
+                    val coffeeCountValid = item?.isCoffeePowder != true || (item.baseUnit == "g" && countedBase != null && countedBase % 250000L == 0L)
                     Button(
-                        enabled = item != null && countedBase != null && countedBase >= 0 && (variance <= 0 || (unitCost.toDoubleOrNull() != null && unitCost.toDoubleOrNull()!! >= 0)),
+                        enabled = item != null && countedBase != null && countedBase >= 0 && coffeeCountValid && (variance <= 0 || (adjustmentCost != null && adjustmentCost >= 0)),
                         onClick = {
                             val current = item
                             val physicalUnits = countedBase
@@ -79,7 +83,7 @@ fun StockReconciliationScreen(db: PaanagamDatabase) {
                                 val record = StockReconciliation(
                                     UUID.randomUUID().toString(), current.id, current.name, location,
                                     systemQty, physicalUnits, physicalUnits - systemQty,
-                                    if (physicalUnits > systemQty) ((unitCost.toDoubleOrNull() ?: 0.0) * 100.0).toLong() else 0L,
+                                    if (physicalUnits > systemQty) (adjustmentCost ?: 0L) else 0L,
                                     note.trim(), now
                                 )
                                 runCatching { db.dao().reconcileStock(record, current) }
