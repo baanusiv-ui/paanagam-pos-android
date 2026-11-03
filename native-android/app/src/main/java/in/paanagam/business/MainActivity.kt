@@ -31,11 +31,11 @@ import javax.crypto.spec.PBEKeySpec
 import java.util.UUID
 import kotlinx.coroutines.launch
 
-private val Espresso = Color(0xFF263A32)
-private val Ivory = Color(0xFFF5F8F5)
-private val Gold = Color(0xFF16845B)
-private val Ink = Color(0xFF20332B)
-private val Mint = Color(0xFFE4F3EC)
+private val Espresso = Color(0xFF3A2519)
+private val Ivory = Color(0xFFFFF8E9)
+private val Gold = Color(0xFFB87928)
+private val Ink = Color(0xFF2B1B12)
+private val Mint = Color(0xFFF3E6C9)
 private val White = Color(0xFFFFFFFF)
 
 private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -419,30 +419,42 @@ private fun MoreModulesScreen(items: List<String>, onSelect: (String) -> Unit) {
 @Composable
 private fun DashboardScreen(db: PaanagamDatabase, onNavigate: (String) -> Unit) {
     val sales by db.dao().sales().collectAsState(initial = emptyList())
+    val saleCosts by db.dao().saleCosts().collectAsState(initial = emptyList())
+    val wastage by db.dao().wastageRecords().collectAsState(initial = emptyList())
     val lowStockCount by db.dao().lowStockCount().collectAsState(initial = 0)
     val todayStart = remember {
-        val calendar = java.util.Calendar.getInstance()
-        calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
-        calendar.set(java.util.Calendar.MINUTE, 0)
-        calendar.set(java.util.Calendar.SECOND, 0)
-        calendar.set(java.util.Calendar.MILLISECOND, 0)
-        calendar.timeInMillis
+        java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
     }
-    val todaySales = sales.filter { it.createdAt >= todayStart }
-    val todayTotal = todaySales.sumOf { it.totalPaise }
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(bottom = 18.dp)) {
+    val todaySales = sales.filter { it.createdAt >= todayStart && it.status == "COMPLETED" }
+    val todaySaleIds = todaySales.map { it.id }.toSet()
+    val todayRevenue = todaySales.sumOf { it.totalPaise }
+    val todayCost = saleCosts.filter { it.saleId in todaySaleIds }.sumOf { it.ingredientCostPaise }
+    val todayWastage = wastage.filter { it.recordedAt >= todayStart }.sumOf { it.costPaise }
+    val foodCost = if (todayRevenue > 0) todayCost.toDouble() / todayRevenue * 100.0 else 0.0
+    val averageBill = if (todaySales.isNotEmpty()) todayRevenue / todaySales.size else 0L
+    val grossMargin = todayRevenue - todayCost
+    val signals = buildList {
+        if (lowStockCount > 0) add("Reorder review" to "$lowStockCount ingredient/location balances are below configured minimums.")
+        if (foodCost > 35.0) add("Food cost needs attention" to "Recorded recipe cost is %.1f%% of today's sales.".format(foodCost))
+        if (todayWastage > 0) add("Wastage recorded" to "Today's recorded wastage is ₹%.2f.".format(todayWastage / 100.0))
+        if (todaySales.isEmpty()) add("Ready for first sale" to "Open POS to begin today's sales.")
+    }.take(4)
+
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
         item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Espresso),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("இனிய காலை வணக்கம்!", color = Color(0xFFB9DCCB), style = MaterialTheme.typography.labelLarge)
-                    Text("Today's business", color = Color.White, style = MaterialTheme.typography.titleMedium)
-                    Text("₹%.2f".format(todayTotal / 100.0), color = Color.White, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                    Text("${todaySales.size} bills  •  Offline data saved on this device", color = Color(0xFFB9DCCB), style = MaterialTheme.typography.bodySmall)
-                    Button(onClick = { onNavigate("POS") }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1C9A6B), contentColor = Color.White)) {
+            Card(colors = CardDefaults.cardColors(containerColor = Espresso), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text("பானகம்  •  காபியும் கதையும்", color = PosMustardFallback, style = MaterialTheme.typography.labelLarge)
+                    Text("Business dashboard", color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text("Today's sales", color = Color(0xFFE8D9C4), style = MaterialTheme.typography.labelMedium)
+                    Text("₹%.2f".format(todayRevenue / 100.0), color = Color.White, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                    Text("${todaySales.size} completed bills  •  Saved on this device", color = Color(0xFFE8D9C4), style = MaterialTheme.typography.bodySmall)
+                    Button(onClick = { onNavigate("POS") }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE97832), contentColor = Color.White)) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
                         Text("New sale")
@@ -451,9 +463,49 @@ private fun DashboardScreen(db: PaanagamDatabase, onNavigate: (String) -> Unit) 
             }
         }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                DashboardMetric("Bills today", todaySales.size.toString(), Modifier.weight(1f))
-                DashboardMetric("Stock alerts", lowStockCount.toString(), Modifier.weight(1f))
+            Text("Today's performance", color = Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DashboardMetric("Sales", "₹%.2f".format(todayRevenue / 100.0), Modifier.weight(1f))
+                    DashboardMetric("Bills", todaySales.size.toString(), Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DashboardMetric("Recipe cost", "₹%.2f".format(todayCost / 100.0), Modifier.weight(1f))
+                    DashboardMetric("Gross margin", "₹%.2f".format(grossMargin / 100.0), Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DashboardMetric("Food cost", "%.1f%%".format(foodCost), Modifier.weight(1f))
+                    DashboardMetric("Avg. bill", "₹%.2f".format(averageBill / 100.0), Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DashboardMetric("Wastage", "₹%.2f".format(todayWastage / 100.0), Modifier.weight(1f))
+                    DashboardMetric("Stock alerts", lowStockCount.toString(), Modifier.weight(1f))
+                }
+            }
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF1D8)), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Insights, contentDescription = null, tint = Gold)
+                        Spacer(Modifier.width(7.dp))
+                        Text("Paanagam business advisor", color = Ink, fontWeight = FontWeight.Bold)
+                    }
+                    Text("Signals from today's recorded sales, recipe cost, wastage and stock.", color = Color(0xFF79634A), style = MaterialTheme.typography.bodySmall)
+                    if (signals.isEmpty()) {
+                        Text("No immediate stock, wastage or food-cost alert from the available records.", color = Ink, style = MaterialTheme.typography.bodyMedium)
+                    } else signals.forEach { (title, detail) ->
+                        Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp)).padding(10.dp), verticalAlignment = Alignment.Top) {
+                            Icon(Icons.Default.Lightbulb, contentDescription = null, tint = Gold)
+                            Spacer(Modifier.width(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(title, color = Ink, fontWeight = FontWeight.SemiBold)
+                                Text(detail, color = Color(0xFF79634A), style = MaterialTheme.typography.bodySmall)
+                            }
+                            TextButton(onClick = { onNavigate(if (title.contains("Reorder")) "Inventory" else if (title.contains("Food")) "Food Cost" else if (title.contains("Wastage")) "Wastage" else "POS") }) { Text("Open") }
+                        }
+                    }
+                }
             }
         }
         item {
@@ -463,45 +515,37 @@ private fun DashboardScreen(db: PaanagamDatabase, onNavigate: (String) -> Unit) 
                 QuickAction("Inventory", Icons.Default.Inventory2, Modifier.weight(1f)) { onNavigate("Inventory") }
                 QuickAction("Purchases", Icons.Default.LocalShipping, Modifier.weight(1f)) { onNavigate("Purchases") }
             }
-        }
-        item {
-            Card(colors = CardDefaults.cardColors(containerColor = White), shape = RoundedCornerShape(20.dp)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Stock health", modifier = Modifier.weight(1f), color = Ink, fontWeight = FontWeight.Bold)
-                        Text(if (lowStockCount == 0) "All clear" else "Needs attention", color = if (lowStockCount == 0) Gold else Color(0xFFC26A27), style = MaterialTheme.typography.labelMedium)
-                    }
-                    Text(
-                        if (lowStockCount > 0) "$lowStockCount ingredient/location stock level(s) are below their configured minimum."
-                        else "No low-stock alerts. Set Store and Kitchen minimums in Inventory.",
-                        color = Color(0xFF65736B), style = MaterialTheme.typography.bodyMedium
-                    )
-                    TextButton(onClick = { onNavigate("Inventory") }) { Text("Manage stock levels") }
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+                QuickAction("Production", Icons.Default.LocalCafe, Modifier.weight(1f)) { onNavigate("Production") }
+                QuickAction("Reconcile", Icons.Default.FactCheck, Modifier.weight(1f)) { onNavigate("Stock Reconciliation") }
+                QuickAction("Reports", Icons.Default.Assessment, Modifier.weight(1f)) { onNavigate("Reports") }
             }
         }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = White), shape = RoundedCornerShape(20.dp)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Card(colors = CardDefaults.cardColors(containerColor = White), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Recent transactions", modifier = Modifier.weight(1f), color = Ink, fontWeight = FontWeight.Bold)
                         TextButton(onClick = { onNavigate("Sales History") }) { Text("See all") }
                     }
-                    if (todaySales.isEmpty()) Text("Your completed bills will appear here.", color = Color(0xFF65736B))
-                    else todaySales.take(4).forEach { sale ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    if (todaySales.isEmpty()) Text("Completed bills will appear here after your first sale.", color = Color(0xFF718078))
+                    else todaySales.take(5).forEach { sale ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column {
                                 Text("Bill ${sale.id.take(8).uppercase()}", color = Ink, fontWeight = FontWeight.Medium)
-                                Text(sale.paymentMethod, color = Color(0xFF829088), style = MaterialTheme.typography.labelSmall)
+                                Text(sale.paymentMethod + " • " + java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(sale.createdAt)), color = Color(0xFF718078), style = MaterialTheme.typography.labelSmall)
                             }
                             Text("₹%.2f".format(sale.totalPaise / 100.0), color = Gold, fontWeight = FontWeight.Bold)
                         }
+                        HorizontalDivider(color = Color(0xFFEFE6D8))
                     }
                 }
             }
         }
     }
 }
+
+private val PosMustardFallback = Color(0xFFDDB36C)
 
 @Composable
 private fun DashboardMetric(label: String, value: String, modifier: Modifier = Modifier) {
