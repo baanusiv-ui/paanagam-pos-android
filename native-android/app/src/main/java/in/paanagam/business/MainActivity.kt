@@ -334,7 +334,7 @@ private fun PaanagamApp(db: PaanagamDatabase, onRecreate: () -> Unit) {
                         "Dashboard" -> DashboardScreen(db, onNavigate = { selected = it })
                         "Sales History" -> SalesHistoryScreen(db)
                         "POS" -> PosScreen(db)
-                        "Menu" -> PosScreen(db)
+                        "Menu" -> MenuManagementScreen(db)
                         "Recipes & BOM / SOP" -> RecipeScreen(db)
                         "SOP Library" -> SopScreen(sops)
                         "Inventory", "Purchases", "Store → Kitchen", "Kitchen Stock" -> InventoryScreen(db, selected)
