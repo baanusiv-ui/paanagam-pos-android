@@ -287,6 +287,7 @@ private fun PaanagamApp(db: PaanagamDatabase) {
                         "Next-Day Planning" -> NextDayPlanningScreen(db)
                         "Combos" -> ComboPlanningScreen(db)
                         "Kitchen KDS" -> KitchenKdsScreen(db)
+                        "Kitchen KDS" -> KitchenKdsScreen(db)
                         else -> OperationalModuleScreen(db, selected)
                     }
                     }
