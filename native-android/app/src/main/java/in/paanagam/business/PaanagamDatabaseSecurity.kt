@@ -222,7 +222,7 @@ internal object PaanagamDatabaseSecurity {
 
     private fun createAndWrapKey(context: Context): ByteArray {
         val key = ByteArray(KEY_BYTES).also(SecureRandom()::nextBytes)
-        val passphrase = key.joinToString("") { "%02x".format(it) }.toByteArray(StandardCharsets.US_ASCII)
+        val passphrase = key.joinToString("") { "%02x".format(it.toInt() and 0xff) }.toByteArray(StandardCharsets.US_ASCII)
         key.fill(0)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, keystoreKey())
