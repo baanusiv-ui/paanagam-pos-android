@@ -451,8 +451,8 @@ private fun StaffAdminScreen(db: PaanagamDatabase, current: StaffMember) {
                     if (editingPermissionsFor == member.id) {
                         Divider()
                         Text("Allowed modules for " + member.name, color = Gold, fontWeight = FontWeight.Bold)
-                        Text("Staff administration, WhatsApp settings and backup remain admin-only.", color = Color(0xFF65736B), style = MaterialTheme.typography.bodySmall)
-                        modules.filterNot { it in ADMIN_ONLY_MODULES }.forEach { module ->
+                        Text("Sensitive inventory, sales, financial, reconciliation and supplier data are Admin-only. Staff administration, WhatsApp settings and backup are also Admin-only.", color = Color(0xFF65736B), style = MaterialTheme.typography.bodySmall)
+                        modules.filterNot { it in ADMIN_ONLY_MODULES || it in ADMIN_DATA_MODULES }.forEach { module ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(checked = module in selectedModules, onCheckedChange = { checked -> selectedModules = if (checked) selectedModules + module else selectedModules - module })
                                 Text(module, color = Ink)
@@ -462,7 +462,7 @@ private fun StaffAdminScreen(db: PaanagamDatabase, current: StaffMember) {
                             TextButton(onClick = { selectedModules = defaultModules(member.role) }) { Text("Role defaults") }
                             TextButton(onClick = { selectedModules = emptySet() }) { Text("Clear all") }
                             Button(onClick = { scope.launch {
-                                runCatching { db.dao().updateStaff(member.copy(allowedModules = selectedModules.filterNot { it in ADMIN_ONLY_MODULES }.takeIf { it.isNotEmpty() }?.joinToString("|") ?: "NONE")) }
+                                runCatching { db.dao().updateStaff(member.copy(allowedModules = selectedModules.filterNot { it in ADMIN_ONLY_MODULES || it in ADMIN_DATA_MODULES }.takeIf { it.isNotEmpty() }?.joinToString("|") ?: "NONE")) }
                                     .onSuccess { message = "Module permissions saved for " + member.name; editingPermissionsFor = null }
                                     .onFailure { message = it.message ?: "Could not save permissions." }
                             } }) { Text("Save access") }
