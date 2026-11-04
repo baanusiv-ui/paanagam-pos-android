@@ -47,7 +47,7 @@ internal object PaanagamDatabaseSecurity {
         // happen here as well as in MainActivity: prepare() runs before its
         // Room-open recovery handler and can itself reject a damaged live file.
         if (!live.exists() && restoreRecovery.exists()) {
-            check(restoreRecovery.renameTo(live)) { "Could not recover the pre-restore Paanagam database." }
+            restoreRecovery.copyTo(live, overwrite = true)
         }
 
         val wrappedExists = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -87,14 +87,16 @@ internal object PaanagamDatabaseSecurity {
                     // known-good database has been restored and validated.
                     if (invalidLive.exists()) check(invalidLive.delete()) { "Could not clear the invalid database staging file." }
                     check(live.renameTo(invalidLive)) { "Could not preserve the invalid restored database for diagnosis." }
-                    if (!restoreRecovery.renameTo(live)) {
+                    try {
+                        restoreRecovery.copyTo(live, overwrite = true)
+                    } catch (copyFailure: Throwable) {
                         invalidLive.renameTo(live)
-                        error("Encrypted restore validation failed and the previous database could not be recovered.")
+                        throw IllegalStateException("Encrypted restore validation failed and the previous database could not be recovered.", copyFailure)
                     }
                     try {
                         verifyEncryptedDatabase(live, key, checkIntegrity = false)
                     } catch (recoveryFailure: Throwable) {
-                        live.renameTo(restoreRecovery)
+                        live.delete()
                         invalidLive.renameTo(live)
                         throw recoveryFailure
                     }
