@@ -783,6 +783,15 @@ private fun PosCartPanel(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column {
                             Text(if (cart.isEmpty()) "No items selected" else "$itemCount items in bill", color = PosIvory, style = MaterialTheme.typography.bodySmall)
+                            if (cart.isNotEmpty()) {
+                                val firstLine = cart.first()
+                                Text(
+                                    firstLine.first.name + if (cart.size > 1) " + " + (cart.size - 1) + " more" else " ×" + firstLine.second,
+                                    color = Color(0xFFD8C5A8),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1
+                                )
+                            }
                             Text("₹%.2f".format(total / 100.0), color = PosMustard, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         }
                         Button(onClick = { expanded = true }, enabled = !saving, colors = ButtonDefaults.buttonColors(containerColor = PosOrange)) {
