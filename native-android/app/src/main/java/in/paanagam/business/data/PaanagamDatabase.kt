@@ -226,6 +226,9 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     @Transaction
     suspend fun replaceRecipe(menuItemId: String, lines: List<RecipeLine>) {
         require(lines.isNotEmpty() && lines.all { it.menuItemId == menuItemId && it.quantityBaseUnits > 0 })
+        require(lines.map { it.ingredientId }.distinct().size == lines.size) {
+            "A recipe can contain each ingredient only once. Combine duplicate ingredient quantities before saving."
+        }
         deleteRecipeLinesForMenuItem(menuItemId)
         lines.forEach { saveRecipeLine(it) }
     }
