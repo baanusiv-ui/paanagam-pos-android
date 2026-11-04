@@ -52,7 +52,7 @@ The current APK is a development build. Do not use it for live business transact
 - PINs are stored as salted PBKDF2-HMAC-SHA256 hashes (120,000 iterations), not plaintext.
 - Staff login now persists failed-attempt counters per staff account. Five incorrect PIN attempts trigger a 30-second lockout, with exponential increases up to 15 minutes; a successful login clears the lockout state.
 - Admin can deactivate and reactivate staff accounts.
-- Admin has full module access; Manager is restricted from staff administration and selected configuration modules; Cashier is limited to Dashboard, POS, Orders and Sales History.
+- Admin has full module access; Manager is restricted from staff administration and selected configuration modules; Cashier is limited to Dashboard, POS, Orders and Cash Shift. Sales History, inventory and financial reporting remain Admin-only.
 - Staff records are local to this device. There is no cloud account sync or remote recovery yet.
 - An authenticated staff session is forced back to the PIN login screen after the app has remained in the background for five minutes. Returning sooner preserves the active session.
 - Admin-only offline backup and restore uses Android's document picker. Backups are SQLite-integrity checked and schema-version checked before restore; the current database is preserved until validation passes. Device-level recovery testing is still required.
@@ -67,11 +67,11 @@ The current APK is a development build. Do not use it for live business transact
 
 ## Security and production hardening still in progress
 
-- SQLCipher database encryption and safe migration of existing plaintext installations are not yet enabled. Do not represent the current database as encrypted.
+- The audit branch now integrates SQLCipher for the live Room database and includes a plaintext-to-encrypted migration. CI build/unit tests pass; physical-device migration and recovery acceptance tests are still required. The unmerged main branch remains unchanged.
 - Device binding uses the app-scoped Android ID and local admin approval after a restored database is opened on a different device. This is not a server-managed device registry and Android ID is not a MAC address.
 - Persistent PIN throttling is implemented: five failed attempts trigger a 30-second lockout with exponential increases capped at 15 minutes; successful login clears the counter.
 - A five-minute background session timeout is implemented and returns staff to PIN login. Device-level verification of lockout timing, process recreation and session expiry remains required.
-- SQLCipher encryption for the live Room database, encrypted portable backup/restore, admin re-authentication and device-level backup recovery tests remain required.
+- Live SQLCipher integration and encrypted portable backup/restore are implemented in this audit branch. Device-level backup recovery and migration tests remain required.
 - Device-level tests for role navigation, database migration, FIFO accounting, sales rollback, backup/restore, offline operation, UPI and printer hardware remain required.
 
 
@@ -84,7 +84,7 @@ The current APK is a development build. Do not use it for live business transact
 - Cash shift expected drawer balance now includes opening float + cash sales + cash-in − cash-out/refunds/withdrawals. Every drawer adjustment requires a positive amount and reason and is tied to the currently open shift.
 - Room migration 23 → 24 creates the cash-movement ledger without deleting existing shift or sales data.
 
-Remaining audit items requiring additional work/device verification: pre-completion POS cancellation/void audit; partial refunds; loyalty reversal on refund; configurable POS tax; real printer/UPI QR integrations; full statutory accounting; encrypted database and backup recovery; complete business workflows for placeholder operational modules. Full-bill refunds require an explicit stock disposition: only unopened, safe returns are restocked; served/opened/unsafe items are recorded as wastage. UPI reversal must still be performed in the UPI app. The app remains a local single-device POS; no multi-device sync is claimed.
+Remaining audit items requiring additional work/device verification: partial refunds; loyalty reversal on refund; configurable POS tax; real printer/UPI QR integrations; full statutory accounting; on-device SQLCipher migration/recovery acceptance; complete business workflows for placeholder operational modules. Full-bill refunds require an explicit stock disposition: only unopened, safe returns are restocked; served/opened/unsafe items are recorded as wastage. UPI reversal must still be performed in the UPI app. The app remains a local single-device POS; no multi-device sync is claimed.
 
 
 ## 360° CCTV and POS cancellation audit
@@ -96,8 +96,8 @@ Remaining audit items requiring additional work/device verification: pre-complet
 - Full-bill refund now requires an explicit stock disposition. Safe, unopened returned stock is restored to its original FIFO lot; served, opened or unsafe food remains consumed and is recorded as wastage. Refund remains atomic with cash ledger, sale status, KDS cancellation and CCTV bookmark.
 - Added local-network permissions and restricted the CCTV module to Admin.
 - Device dependency: generic RTSP is a video transport, not a universal record/clip-control API. This build creates a durable local timestamp bookmark; automatic camera-side clip retrieval/recording trigger and ONVIF PTZ/fisheye dewarping require the selected camera/NVR's supported ONVIF recording profile or vendor API. Verify the exact model before enabling that claim in production.
-- Pre-completion POS cart cancellation/void is not yet linked to a durable CCTV audit event. The current bookmark workflow covers completed-sale refunds only.
-- The new viewer and audit log still require Android build verification and physical camera testing. Do not treat this feature as production CCTV evidence until a real camera stream and clip retrieval are validated.
+- Pre-completion cart cancellation now records a durable local audit bookmark with cashier identity, required reason, amount and timestamp before the cart is cleared. Individual cart-line removals are also logged. These are local timestamp bookmarks, not proof that camera-side recording or clip retrieval was triggered.
+- CI build verification now passes for the audit branch. Physical camera stream, recording trigger, clip retrieval and PTZ/fisheye testing remain outstanding. Do not treat local bookmarks as production CCTV evidence until the selected camera/NVR is validated.
 
 - Fresh Admin PIN re-authentication is required before opening Staff & HR, Data Backup/Restore, and CCTV & Audit. Re-authentication has its own persistent failed-attempt counter and escalating lockout, separate from the normal staff-login counter. This is an in-app gate; device-level verification and review of every sensitive write action remain required.
 
@@ -109,30 +109,35 @@ Remaining audit items requiring additional work/device verification: pre-complet
 - Lockout timing is centralized in `PinLockoutPolicy` and covered by JVM tests for threshold, exponential backoff, cap, deadline arithmetic and overflow.
 - CI has passed for the current Admin re-authentication implementation and its follow-up documentation commit. Device-level verification is still required.
 
-## Database encryption migration — safety gate
+## Live database encryption — CI build verified; device acceptance pending
 
-The live Room database is still a plaintext SQLite database. Portable backups are also currently raw SQLite files. Do not describe either as encrypted or share exported backups as if they were protected.
+The development branch now wires Room to SQLCipher Android 4.20.0. The live database key is generated randomly, wrapped by an Android Keystore AES-256-GCM key, and the wrapped key alone is persisted in app-private preferences. Existing plaintext SQLite files are copied to a new encrypted temporary database using `sqlcipher_export()`; the temporary database is reopened with the key and checked for SQLCipher status, SQLite integrity and Room schema version before the file switch. A separate recovery filename is retained across the file-swap boundary so an interrupted switch can restore the original file.
 
-The SQLCipher Android Community Edition artifact is available from Maven Central and its upstream project documents Room 2 integration. Integration is deliberately not enabled until the existing plaintext database can be converted and recovered safely.
+Portable backups remain independent of the per-device database key. Backup export creates a temporary plaintext SQLite copy from the encrypted database, then encrypts it with the user's AES-256-GCM passphrase envelope. Restore decrypts and validates that portable SQLite file, re-encrypts it with the receiving device's Keystore-protected key, and only then replaces the live database. This preserves cross-device restore.
 
-Required migration invariants before enabling SQLCipher:
+The following are not yet production-verified:
+1. Physical-device migration of a populated Paanagam database, preserving sales, sale lines, FIFO lots/movements, staff, cash shifts, refunds, loyalty and CCTV audit records.
+2. Process-kill tests at each migration/swap stage, low-storage handling, wrong-key handling, and recovery on a real Android device.
+3. Cross-device portable backup/restore and Room schema migration from older database versions.
+4. Confirmation that the temporary plaintext export and migration recovery copy are removed after successful completion. Flash storage does not guarantee physical secure erasure after file deletion.
 
-1. Generate a cryptographically random database key and wrap it with an Android Keystore AES-GCM key; never hardcode or store the database key in preferences.
-2. Preserve the original plaintext database untouched while creating an encrypted temporary database. Never point the SQLCipher Room factory at the existing plaintext file.
-3. Validate the encrypted temporary database before switching: SQLCipher can reopen it with the wrapped key, integrity check passes, Room schema version is 27, and representative business tables retain their row counts.
-4. Make the swap atomic and restart-safe. A process kill, low-storage condition, wrong key or failed validation must leave the original database recoverable and must never trigger an empty-database fallback.
-5. Portable backups must use a separate user-held passphrase and authenticated encryption so they can be restored on a replacement device; a key protected only by the source device's Android Keystore is not a portable backup.
-6. Test new install, existing install, empty database, corrupted database, wrong key, interrupted conversion, insufficient storage, restore to another device, and rollback. Include sales, sale lines, FIFO lots/movements, staff, cash shifts, refunds, loyalty and CCTV audit data in preservation checks.
+Do not merge this work to main or distribute it as a production release until CI and physical-device migration/restore acceptance tests pass. The debug build is not a substitute for those checks.
 
-Until these gates pass, retain the existing Room open path and prominently warn that backups contain sensitive unencrypted data.
-
-
-## Portable backup encryption (0.2.10 work in progress)
+## Portable backup encryption (0.2.10)
 
 - Exported portable backups now use a versioned AES-256-GCM authenticated-encryption envelope.
 - A 256-bit key is derived from a user-held passphrase with PBKDF2-HMAC-SHA256 (310,000 iterations), a random 16-byte salt and a random 12-byte GCM nonce.
 - Restore authenticates/decrypts into a staging file, then checks SQLite integrity, Room schema version and required Paanagam tables before swapping it into place.
 - Passphrases are not persisted. Losing the passphrase means the encrypted backup cannot be recovered.
 - JVM tests cover round-trip recovery, wrong passphrases, ciphertext tampering and minimum passphrase length.
-- This protects portable backup files only. The live Room database is still plaintext until the separate SQLCipher migration is implemented and validated.
+- Portable backup encryption is separate from the live database's SQLCipher encryption. Backup files can be restored on another device because the receiving installation re-encrypts the restored database with its own Android Keystore-protected key.
 - Existing raw .db backups from earlier builds are not encrypted-format backups; retain the old app build and the original backup until legacy restore compatibility is explicitly validated. Do not delete older backup copies.
+
+
+## Standalone APK boundary (confirmed 2026-11-04)
+
+- The deliverable is the native Android APK in this repository. Apper is not the application host, UI runtime, authentication provider, database, backend, or deployment target.
+- Apper may be consulted only as a read-only reference source to retrieve existing business data (for example catalogue/menu items, recipes, ingredient definitions and opening reference values) for review and controlled import into the native app.
+- The APK must remain fully usable if Apper is disconnected, deleted, unavailable or its project changes. Do not add Apper SDKs, webviews, API runtime dependencies, login dependencies, or automatic bidirectional sync.
+- Any reference-data import must be explicit, validated and auditable: preview records, detect duplicates, validate units and relationships, then import into the local Room database. Never overwrite live sales, stock movements, FIFO lots, staff PINs, cash shifts or audit history from Apper reference data.
+- The local Room database remains the operational source of truth. Offline checkout, inventory accounting, refunds, wastage and reports must execute locally. Future optional sync, if separately approved, must use a backend independent of Apper.

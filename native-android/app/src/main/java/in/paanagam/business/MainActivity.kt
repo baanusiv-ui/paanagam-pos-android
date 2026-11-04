@@ -2,7 +2,6 @@ package `in`.paanagam.business
 
 import android.os.Bundle
 import android.provider.Settings
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -19,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.room.Room
 import androidx.room.migration.Migration
@@ -227,6 +227,59 @@ private val MIGRATION_26_27 = object : Migration(26, 27) {
     }
 }
 
+private val MIGRATION_27_28 = object : Migration(27, 28) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS loyalty_ledger (id TEXT NOT NULL PRIMARY KEY, phone TEXT NOT NULL, saleId TEXT NOT NULL, entryType TEXT NOT NULL, coffeeDelta INTEGER NOT NULL, rewardDelta INTEGER NOT NULL, lifetimeDelta INTEGER NOT NULL, createdAt INTEGER NOT NULL, reversesEntryId TEXT)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_loyalty_ledger_phone_createdAt ON loyalty_ledger(phone, createdAt)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_loyalty_ledger_saleId ON loyalty_ledger(saleId)")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_loyalty_ledger_reversesEntryId ON loyalty_ledger(reversesEntryId)")
+    }
+}
+
+
+private val MIGRATION_28_29 = object : Migration(28, 29) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE stock_movements ADD COLUMN saleLineId TEXT")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_stock_movements_saleLineId ON stock_movements(saleLineId)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS sale_line_refunds (id TEXT NOT NULL PRIMARY KEY, saleId TEXT NOT NULL, saleLineId TEXT NOT NULL, refundedQuantity INTEGER NOT NULL, amountPaise INTEGER NOT NULL, cashRefundPaise INTEGER NOT NULL, upiRefundPaise INTEGER NOT NULL, stockDisposition TEXT NOT NULL, reason TEXT NOT NULL, refundedAt INTEGER NOT NULL)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_sale_line_refunds_saleId ON sale_line_refunds(saleId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_sale_line_refunds_saleLineId ON sale_line_refunds(saleLineId)")
+    }
+}
+
+private val MIGRATION_29_30 = object : Migration(29, 30) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE stock_movements ADD COLUMN saleUnitIndex INTEGER")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_stock_movements_saleLineId_saleUnitIndex ON stock_movements(saleLineId, saleUnitIndex)")
+        db.execSQL("ALTER TABLE sale_line_refunds ADD COLUMN saleUnitIndex INTEGER NOT NULL DEFAULT -1")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_sale_line_refunds_saleLineId_saleUnitIndex ON sale_line_refunds(saleLineId, saleUnitIndex)")
+    }
+}
+
+private val MIGRATION_30_31 = object : Migration(30, 31) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE wastage_records ADD COLUMN sourceType TEXT NOT NULL DEFAULT 'MANUAL'")
+        db.execSQL("ALTER TABLE wastage_records ADD COLUMN sourceId TEXT")
+        db.execSQL("ALTER TABLE wastage_records ADD COLUMN sourceLineId TEXT")
+        db.execSQL("ALTER TABLE wastage_records ADD COLUMN stockAdjusted INTEGER NOT NULL DEFAULT 1")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_wastage_records_sourceId ON wastage_records(sourceId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_wastage_records_sourceLineId ON wastage_records(sourceLineId)")
+    }
+}
+
+private val MIGRATION_31_32 = object : Migration(31, 32) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE sales ADD COLUMN orderType TEXT NOT NULL DEFAULT 'DINE_IN'")
+        db.execSQL("ALTER TABLE held_orders ADD COLUMN orderType TEXT NOT NULL DEFAULT 'DINE_IN'")
+    }
+}
+
+private val MIGRATION_32_33 = object : Migration(32, 33) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE catalog_items ADD COLUMN sku TEXT NOT NULL DEFAULT ''")
+    }
+}
+
 class MainActivity : ComponentActivity() {
     private val sessionPrefs by lazy { getSharedPreferences("paanagam_session_security", MODE_PRIVATE) }
     private var forcingSessionRelogin = false
@@ -251,24 +304,36 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
             ?: error("Android device identifier is unavailable.")
-        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27).build()
+        val databaseKey = PaanagamDatabaseSecurity.prepare(applicationContext)
+        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db")
+            .openHelperFactory(PaanagamDatabaseSecurity.roomOpenHelperFactory(databaseKey))
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33)
+            .build()
         val liveFile = getDatabasePath("paanagam-local.db")
         val recoveryFile = getDatabasePath("paanagam-before-restore.db")
+        val migrationRecoveryFile = getDatabasePath("paanagam-local.db.plaintext-recovery")
         try {
             db.openHelper.writableDatabase
-            if (recoveryFile.exists()) recoveryFile.delete()
+            if (recoveryFile.exists()) check(recoveryFile.delete()) { "Could not remove the previous restore recovery file." }
+            if (migrationRecoveryFile.exists()) check(migrationRecoveryFile.delete()) { "Database opened, but the plaintext migration recovery file could not be removed. Retry app startup before using POS." }
         } catch (failure: Throwable) {
             db.close()
             if (recoveryFile.exists()) {
                 liveFile.delete()
-                recoveryFile.renameTo(liveFile)
+                check(recoveryFile.renameTo(liveFile)) {
+                    "Database open failed and the pre-restore database could not be recovered."
+                }
+            } else if (migrationRecoveryFile.exists()) {
+                liveFile.delete()
+                check(migrationRecoveryFile.renameTo(liveFile)) {
+                    "Room migration failed and the original plaintext database could not be recovered."
+                }
             }
             throw failure
         }
-        setContent { PaanagamApp(db, androidId) { recreate() } }
+        setContent { PaanagamApp(db, androidId, databaseKey) { recreate() } }
     }
 }
 
@@ -282,7 +347,7 @@ private val modules = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PaanagamApp(db: PaanagamDatabase, androidId: String, onRecreate: () -> Unit) {
+private fun PaanagamApp(db: PaanagamDatabase, androidId: String, databaseKey: ByteArray, onRecreate: () -> Unit) {
     var selected by remember { mutableStateOf("Dashboard") }
     var activeStaff by remember { mutableStateOf<StaffMember?>(null) }
     var firstStaffExists by remember { mutableStateOf<Boolean?>(null) }
@@ -299,7 +364,7 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, onRecreate: () 
     }
     var showMore by remember { mutableStateOf(false) }
     val sops by db.dao().sops().collectAsState(initial = emptyList())
-    val primaryTabs = listOf("Dashboard", "POS", "Inventory", "Sales History", "More")
+    val primaryTabs = if (activeStaff == null) listOf("Dashboard", "POS", "Inventory", "Sales History", "More") else listOf("Dashboard", "POS", "Inventory", "Sales History", "More").filter { tab -> tab == "More" || canAccess(activeStaff!!, tab) }
     MaterialTheme(
         colorScheme = lightColorScheme(
             primary = Gold, onPrimary = Color.White, secondary = Espresso,
@@ -403,12 +468,12 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, onRecreate: () 
                     }
                     else -> {
                     when (selected) {
-                        "Dashboard" -> DashboardScreen(db, onNavigate = { selected = it })
+                        "Dashboard" -> DashboardScreen(db, adminView = activeStaff!!.role == "ADMIN", onNavigate = { selected = it })
                         "Sales History" -> SalesHistoryScreen(db, activeStaff!!)
                         "CCTV & Audit" -> AdminReauthGate(activeStaff!!, "CCTV & Audit") { CctvScreen(db, activeStaff!!) }
-                        "POS" -> PosScreen(db)
+                        "POS" -> PosScreen(db, activeStaff!!)
                         "Menu" -> MenuManagementScreen(db)
-                        "Recipes & BOM / SOP" -> RecipeScreen(db)
+                        "Recipes & BOM / SOP", "BOM" -> RecipeScreen(db)
                         "SOP Library" -> SopScreen(sops)
                         "Inventory", "Purchases", "Store → Kitchen", "Kitchen Stock" -> InventoryScreen(db, selected)
                         "Production", "Wastage" -> ProductionScreen(db)
@@ -423,7 +488,7 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, onRecreate: () 
                         "Next-Day Planning" -> NextDayPlanningScreen(db)
                         "Combos" -> ComboPlanningScreen(db)
                         "Kitchen KDS" -> KitchenKdsScreen(db)
-                        "Data Backup" -> AdminReauthGate(activeStaff!!, "Database backup and restore") { DatabaseBackupScreen(db, onRecreate) }
+                        "Data Backup" -> AdminReauthGate(activeStaff!!, "Database backup and restore") { DatabaseBackupScreen(db, databaseKey, onRecreate) }
                         else -> OperationalModuleScreen(db, selected)
                     }
                     }
@@ -436,7 +501,7 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, onRecreate: () 
 private val ADMIN_ONLY_MODULES = setOf("Staff & HR", "WhatsApp Settings", "Data Backup", "CCTV & Audit")
 private val ADMIN_DATA_MODULES = setOf("Inventory", "Purchases", "Store → Kitchen", "Kitchen Stock", "Sales History", "Reports", "Food Cost", "Finance & P&L", "Stock Reconciliation", "Sales Reconciliation", "Suppliers")
 private val MANAGER_DEFAULT_MODULES = modules.filterNot { it in ADMIN_ONLY_MODULES + setOf("Business Planner", "Marketing Automation", "Automation Hub") }.toSet()
-private val CASHIER_DEFAULT_MODULES = setOf("Dashboard", "POS", "Orders", "Sales History", "Cash Shift")
+private val CASHIER_DEFAULT_MODULES = setOf("Dashboard", "POS", "Orders", "Cash Shift")
 
 private fun defaultModules(role: String): Set<String> = when (role) {
     "ADMIN" -> modules.toSet()
@@ -481,8 +546,8 @@ private fun AdminSetupScreen(onCreate: (String, String) -> Unit) {
         Text("Set up Paanagam Admin", color = Ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("Create the first administrator account. Choose a private 4–8 digit PIN.", color = Color(0xFF65736B))
         OutlinedTextField(name, { name = it }, label = { Text("Admin name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("Admin PIN") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(confirm, { confirm = it.filter(Char::isDigit).take(8) }, label = { Text("Confirm PIN") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("Admin PIN") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(confirm, { confirm = it.filter(Char::isDigit).take(8) }, label = { Text("Confirm PIN") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
         if (error.isNotBlank()) Text(error, color = Color.Red)
         Button(onClick = { if (name.isBlank() || pin.length !in 4..8 || pin != confirm) error = "Enter a name and matching 4–8 digit PIN." else onCreate(name, pin) }, modifier = Modifier.fillMaxWidth()) { Text("Create Admin account") }
     }
@@ -521,7 +586,7 @@ private fun StaffLoginScreen(db: PaanagamDatabase, onLogin: (StaffMember) -> Uni
                 Column { Text(member.name, color = Ink, fontWeight = FontWeight.Medium); Text(member.role, color = Color(0xFF718078), style = MaterialTheme.typography.labelSmall) }
             }
         }
-        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("PIN") }, singleLine = true, enabled = System.currentTimeMillis() >= lockoutUntil, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("PIN") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), enabled = System.currentTimeMillis() >= lockoutUntil, modifier = Modifier.fillMaxWidth())
         if (error.isNotBlank()) Text(error, color = Color.Red)
         Button(
             onClick = {
@@ -599,6 +664,7 @@ private fun AdminReauthGate(staff: StaffMember, actionTitle: String, content: @C
                 onValueChange = { pin = it.filter(Char::isDigit).take(8) },
                 label = { Text("Admin PIN") },
                 singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
                 enabled = System.currentTimeMillis() >= lockoutUntil,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -653,7 +719,7 @@ private fun StaffAdminScreen(db: PaanagamDatabase, current: StaffMember) {
         Text("Staff access management", color = Gold, style = MaterialTheme.typography.titleLarge)
         Text("Android-only local login. Admin creates cashier and manager accounts, assigns a private PIN, controls module access and can reset or deactivate access. PINs are salted PBKDF2 hashes stored on this device.", color = Color(0xFF65736B))
         OutlinedTextField(name, { name = it }, label = { Text("Staff name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("Initial / reset PIN (4–8 digits)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("Initial / reset PIN (4–8 digits)") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
         Row { FilterChip(selected = role == "CASHIER", onClick = { role = "CASHIER" }, label = { Text("Cashier") }); Spacer(Modifier.width(8.dp)); FilterChip(selected = role == "MANAGER", onClick = { role = "MANAGER" }, label = { Text("Manager") }) }
         Button(onClick = { scope.launch { if (name.isBlank() || pin.length !in 4..8) message = "Enter staff name and valid PIN." else { val c = pinCredentials(pin); db.dao().insertStaff(StaffMember(UUID.randomUUID().toString(), name.trim(), role, c.first, c.second, true, System.currentTimeMillis())); name = ""; pin = ""; message = "Staff account created." } } }, modifier = Modifier.fillMaxWidth()) { Text("Create staff account") }
         if (message.isNotBlank()) Text(message, color = Gold)
@@ -723,10 +789,11 @@ private fun MoreModulesScreen(items: List<String>, onSelect: (String) -> Unit) {
 }
 
 @Composable
-private fun DashboardScreen(db: PaanagamDatabase, onNavigate: (String) -> Unit) {
+private fun DashboardScreen(db: PaanagamDatabase, adminView: Boolean, onNavigate: (String) -> Unit) {
     val sales by db.dao().sales().collectAsState(initial = emptyList())
     val saleCosts by db.dao().saleCosts().collectAsState(initial = emptyList())
     val wastage by db.dao().wastageRecords().collectAsState(initial = emptyList())
+    val refunds by db.dao().allSaleRefunds().collectAsState(initial = emptyList())
     val lowStockCount by db.dao().lowStockCount().collectAsState(initial = 0)
     val todayStart = remember {
         java.util.Calendar.getInstance().apply {
@@ -736,9 +803,11 @@ private fun DashboardScreen(db: PaanagamDatabase, onNavigate: (String) -> Unit) 
             set(java.util.Calendar.MILLISECOND, 0)
         }.timeInMillis
     }
-    val todaySales = sales.filter { it.createdAt >= todayStart && it.status == "COMPLETED" }
+    val todaySales = sales.filter { it.createdAt >= todayStart && it.status in setOf("COMPLETED", "PARTIALLY_REFUNDED", "REFUNDED") }
     val todaySaleIds = todaySales.map { it.id }.toSet()
-    val todayRevenue = todaySales.sumOf { it.totalPaise }
+    val todayGross = todaySales.sumOf { it.totalPaise }
+    val todayRefundTotal = refunds.filter { it.refundedAt >= todayStart }.sumOf { it.amountPaise }
+    val todayRevenue = todayGross - todayRefundTotal
     val todayCost = saleCosts.filter { it.saleId in todaySaleIds }.sumOf { it.ingredientCostPaise }
     val todayWastage = wastage.filter { it.recordedAt >= todayStart }.sumOf { it.costPaise }
     val foodCost = if (todayRevenue > 0) todayCost.toDouble() / todayRevenue * 100.0 else 0.0
@@ -752,6 +821,7 @@ private fun DashboardScreen(db: PaanagamDatabase, onNavigate: (String) -> Unit) 
     }.take(4)
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
+        if (adminView) {
         item {
             Card(colors = CardDefaults.cardColors(containerColor = Espresso), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -759,7 +829,7 @@ private fun DashboardScreen(db: PaanagamDatabase, onNavigate: (String) -> Unit) 
                     Text("Business dashboard", color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Text("Today's sales", color = Color(0xFFE8D9C4), style = MaterialTheme.typography.labelMedium)
                     Text("₹%.2f".format(todayRevenue / 100.0), color = Color.White, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                    Text("${todaySales.size} completed bills  •  Saved on this device", color = Color(0xFFE8D9C4), style = MaterialTheme.typography.bodySmall)
+                    Text("${todaySales.size} bills • refunds deducted • Saved on this device", color = Color(0xFFE8D9C4), style = MaterialTheme.typography.bodySmall)
                     Button(onClick = { onNavigate("POS") }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE97832), contentColor = Color.White)) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
@@ -844,6 +914,21 @@ private fun DashboardScreen(db: PaanagamDatabase, onNavigate: (String) -> Unit) 
                             Text("₹%.2f".format(sale.totalPaise / 100.0), color = Gold, fontWeight = FontWeight.Bold)
                         }
                         HorizontalDivider(color = Color(0xFFEFE6D8))
+                    }
+                }
+            }
+        }
+        } else {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = Espresso), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Cashier workspace", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text("Use POS to create orders. Sales history, stock balances and financial reports are restricted to Admin.", color = Color(0xFFE8D9C4), style = MaterialTheme.typography.bodyMedium)
+                        Button(onClick = { onNavigate("POS") }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE97832), contentColor = Color.White)) {
+                            Icon(Icons.Default.PointOfSale, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Open POS")
+                        }
                     }
                 }
             }

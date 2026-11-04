@@ -2,7 +2,6 @@ package `in`.paanagam.business
 
 import android.content.Context
 import android.net.Uri
-import android.database.sqlite.SQLiteDatabase
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -36,94 +35,68 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.util.UUID
 
 private const val PAANAGAM_DB_NAME = "paanagam-local.db"
 
 private object PaanagamDatabaseBackup {
-    fun export(context: Context, db: PaanagamDatabase, destination: Uri, passphrase: CharArray) {
+    fun export(context: Context, db: PaanagamDatabase, destination: Uri, passphrase: CharArray, databaseKey: ByteArray) {
         val liveDb = db.openHelper.writableDatabase
         liveDb.query("PRAGMA wal_checkpoint(TRUNCATE)").use { cursor ->
-            if (cursor.moveToFirst() && cursor.getInt(0) != 0) {
-                error("Database is busy. Close other operations and try the backup again.")
-            }
+            if (cursor.moveToFirst() && cursor.getInt(0) != 0) error("Database is busy. Close other operations and try again.")
         }
         db.close()
-        val source = context.getDatabasePath(PAANAGAM_DB_NAME)
-        require(source.isFile && source.length() > 0L) { "Local database file was not found." }
-        val output = context.contentResolver.openOutputStream(destination, "wt")
-            ?: error("Could not open the selected backup destination.")
+        val portable = File(context.cacheDir, "paanagam-portable-${UUID.randomUUID()}.db")
         try {
-            FileInputStream(source).use { input ->
-                output.use { PortableBackupCrypto.encrypt(input, it, passphrase) }
-            }
+            PaanagamDatabaseSecurity.exportPlaintextForBackup(context, databaseKey, portable)
+            val output = context.contentResolver.openOutputStream(destination, "wt")
+                ?: error("Could not open the selected backup destination.")
+            portable.inputStream().use { input -> output.use { PortableBackupCrypto.encrypt(input, it, passphrase) } }
         } finally {
+            portable.delete()
             passphrase.fill('\u0000')
         }
     }
 
-    fun restore(context: Context, db: PaanagamDatabase, backupUri: Uri, passphrase: CharArray) {
+    fun restore(context: Context, db: PaanagamDatabase, backupUri: Uri, passphrase: CharArray, databaseKey: ByteArray) {
         val liveFile = context.getDatabasePath(PAANAGAM_DB_NAME)
         val directory = liveFile.parentFile ?: error("Database directory is unavailable.")
-        val staged = File(directory, "paanagam-restore-${UUID.randomUUID()}.tmp")
+        val stagedPlain = File(directory, "paanagam-restore-${UUID.randomUUID()}.plain")
+        val stagedEncrypted = File(directory, "paanagam-restore-${UUID.randomUUID()}.enc")
         val previous = File(directory, "paanagam-before-restore.db")
         try {
             val input = context.contentResolver.openInputStream(backupUri)
                 ?: error("Could not read the selected backup file.")
             input.use { encrypted ->
-                FileOutputStream(staged).use { decrypted ->
+                stagedPlain.outputStream().use { decrypted ->
                     PortableBackupCrypto.decrypt(encrypted, decrypted, passphrase)
                 }
             }
-            require(staged.isFile && staged.length() > 0L) { "The decrypted backup is empty." }
-            validateBackup(staged)
-
+            PaanagamDatabaseSecurity.validatePlaintextDatabase(stagedPlain)
+            PaanagamDatabaseSecurity.encryptPortableRestore(stagedPlain, stagedEncrypted, databaseKey)
             db.close()
             File(liveFile.path + "-wal").delete()
             File(liveFile.path + "-shm").delete()
             if (previous.exists()) require(previous.delete()) { "Could not clear the previous recovery file." }
             require(!liveFile.exists() || liveFile.renameTo(previous)) { "Could not preserve the current database before restore." }
-            if (!staged.renameTo(liveFile)) {
+            if (!stagedEncrypted.renameTo(liveFile)) {
                 if (previous.exists()) previous.renameTo(liveFile)
                 error("Could not install the restored database. The original database was preserved.")
             }
         } catch (error: Throwable) {
-            staged.delete()
             if (!liveFile.exists() && previous.exists()) previous.renameTo(liveFile)
             throw error
         } finally {
+            stagedPlain.delete()
+            stagedEncrypted.delete()
             passphrase.fill('\u0000')
-        }
-    }
-
-    private fun validateBackup(file: File) {
-        val sqlite = SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
-        try {
-            val integrity = sqlite.rawQuery("PRAGMA integrity_check", null).use { cursor ->
-                if (cursor.moveToFirst()) cursor.getString(0) else ""
-            }
-            require(integrity.equals("ok", ignoreCase = true)) { "Backup failed SQLite integrity check." }
-            val version = sqlite.rawQuery("PRAGMA user_version", null).use { cursor ->
-                if (cursor.moveToFirst()) cursor.getInt(0) else 0
-            }
-            require(version in 1..27) { "Unsupported backup database version: $version." }
-            val tables = mutableSetOf<String>()
-            sqlite.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", null).use { cursor ->
-                while (cursor.moveToNext()) tables.add(cursor.getString(0))
-            }
-            require(setOf("room_master_table", "ingredients", "sales", "stock_lots").all { it in tables }) {
-                "This file is not a valid Paanagam database backup."
-            }
-        } finally {
-            sqlite.close()
         }
     }
 }
 
 @Composable
-fun DatabaseBackupScreen(db: PaanagamDatabase, onRecreate: () -> Unit) {
+fun DatabaseBackupScreen(db: PaanagamDatabase, databaseKey: ByteArray, onRecreate: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
@@ -144,7 +117,7 @@ fun DatabaseBackupScreen(db: PaanagamDatabase, onRecreate: () -> Unit) {
             busy = true
             scope.launch {
                 try {
-                    withContext(Dispatchers.IO) { PaanagamDatabaseBackup.export(context, db, uri, secret) }
+                    withContext(Dispatchers.IO) { PaanagamDatabaseBackup.export(context, db, uri, secret, databaseKey) }
                     message = "Encrypted backup saved. Keep the passphrase separately; it cannot be recovered."
                 } catch (error: Throwable) {
                     secret.fill('\u0000')
@@ -171,7 +144,7 @@ fun DatabaseBackupScreen(db: PaanagamDatabase, onRecreate: () -> Unit) {
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8E9))) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Security")
-                Text("Backup files use AES-256-GCM authenticated encryption with a key derived from your passphrase. The passphrase is not stored. The live on-device Room database remains unencrypted at this stage.")
+                Text("The live on-device Room database uses SQLCipher encryption. Its random database key is protected by Android Keystore AES-256-GCM and is not stored as plaintext. Portable backup files use a separate AES-256-GCM passphrase envelope so they can be restored on another device. Keep the backup passphrase separately; it is never stored by the app.")
             }
         }
         Button(
@@ -238,7 +211,7 @@ fun DatabaseBackupScreen(db: PaanagamDatabase, onRecreate: () -> Unit) {
                         busy = true
                         scope.launch {
                             try {
-                                withContext(Dispatchers.IO) { PaanagamDatabaseBackup.restore(context, db, uri, secret) }
+                                withContext(Dispatchers.IO) { PaanagamDatabaseBackup.restore(context, db, uri, secret, databaseKey) }
                                 message = "Encrypted backup restored and validated successfully."
                             } catch (error: Throwable) {
                                 secret.fill('\u0000')

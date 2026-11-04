@@ -81,19 +81,46 @@ fun ComboPlanningScreen(db: PaanagamDatabase) {
         Button(onClick = {
             val price = runCatching { BigDecimal(comboPrice).takeIf { it.signum() > 0 }?.setScale(2, RoundingMode.HALF_UP)?.movePointRight(2)?.longValueExact() }.getOrNull()
             if (comboName.isBlank() || price == null || price <= 0 || draft.isEmpty()) message = "Enter combo name, valid price and at least one component."
-            else {
-                val missing = draft.filter { part ->
-                    catalog.none { it.id == part.componentItemId && it.active } || allRecipes.none { it.menuItemId == part.componentItemId }
+            else scope.launch {
+                    val id = UUID.randomUUID().toString()
+                    val validation = runCatching {
+                        val visiting = mutableSetOf<String>()
+                        suspend fun validateTree(itemId: String) {
+                            require(visiting.add(itemId)) { "Circular combo detected. Correct the existing combo structure first." }
+                            val parts = db.dao().comboComponents(itemId)
+                            if (parts.isEmpty()) {
+                                require(db.dao().recipeLines(itemId).isNotEmpty()) {
+                                    "Configure a recipe for ${catalog.firstOrNull { it.id == itemId }?.name ?: itemId}."
+                                }
+                            } else {
+                                require(parts.all { it.quantity > 0 }) { "Combo component quantity must be positive." }
+                                parts.forEach { validateTree(it.componentItemId) }
+                            }
+                            visiting.remove(itemId)
+                        }
+                        draft.forEach { part ->
+                            require(catalog.any { it.id == part.componentItemId && it.active }) {
+                                "Component ${part.componentName} is unavailable."
+                            }
+                            validateTree(part.componentItemId)
+                        }
+                    }
+                    if (validation.isFailure) {
+                        message = validation.exceptionOrNull()?.message ?: "Combo recipe validation failed."
+                    } else {
+                        val item = CatalogItem(id, comboName.trim(), "Combos", price, true)
+                        runCatching {
+                            db.withTransaction {
+                                val dao = db.dao()
+                                dao.saveCatalogItem(item)
+                                dao.replaceComboComponents(id, draft.map { it.copy(comboItemId = id) })
+                            }
+                        }.onSuccess {
+                            comboName = ""; comboPrice = ""; draft = emptyList()
+                            message = "Combo saved. Nested component recipes will be expanded and checked at POS checkout."
+                        }.onFailure { message = it.message ?: "Combo could not be saved." }
+                    }
                 }
-                if (missing.isNotEmpty()) message = "Configure recipes for: " + missing.joinToString { it.componentName }
-                else scope.launch {
-                val id = UUID.randomUUID().toString()
-                val item = CatalogItem(id, comboName.trim(), "Combos", price, true)
-                runCatching { db.withTransaction { val dao = db.dao(); dao.saveCatalogItem(item); dao.replaceComboComponents(id, draft.map { it.copy(comboItemId = id) }) } }
-                    .onSuccess { comboName = ""; comboPrice = ""; draft = emptyList(); message = "Combo saved. POS will calculate component recipes and FIFO stock at checkout." }
-                    .onFailure { message = it.message ?: "Combo could not be saved." }
-                }
-            }
         }, modifier = Modifier.fillMaxWidth()) { Text("Save combo") }
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.primary)
         Divider()

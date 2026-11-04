@@ -3,11 +3,13 @@ package `in`.paanagam.business
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import `in`.paanagam.business.data.PaanagamDatabase
 import `in`.paanagam.business.data.SaleLine
@@ -24,13 +26,19 @@ private val HistoryPanel = Color(0xFF3A2519)
 @Composable
 fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
     val sales by db.dao().sales().collectAsState(initial = emptyList())
+    val refunds by db.dao().allSaleRefunds().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var expandedSaleId by remember { mutableStateOf<String?>(null) }
     var selectedLines by remember { mutableStateOf<List<SaleLine>>(emptyList()) }
     var selectedCostPaise by remember { mutableStateOf<Long?>(null) }
     var refundSaleId by remember { mutableStateOf<String?>(null) }
     var refundReason by remember { mutableStateOf("Customer return") }
-    var refundStockDisposition by remember { mutableStateOf("WASTED") }
+    var partialRefundSaleId by remember { mutableStateOf<String?>(null) }
+    var partialRefundLines by remember { mutableStateOf<List<SaleLine>>(emptyList()) }
+    var partialRefundedByLine by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
+    var partialRefundLineId by remember { mutableStateOf<String?>(null) }
+    var partialRefundQuantity by remember { mutableStateOf("1") }
+    var partialRefundReason by remember { mutableStateOf("Customer return") }
     var message by remember { mutableStateOf("") }
     val todayStart = run {
         val calendar = java.util.Calendar.getInstance()
@@ -41,7 +49,9 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
         calendar.timeInMillis
     }
     val todaySales = sales.filter { it.createdAt >= todayStart }
-    val todayTotal = todaySales.sumOf { it.totalPaise }
+    val todayGross = todaySales.sumOf { it.totalPaise }
+    val todayRefunds = refunds.filter { it.refundedAt >= todayStart }.sumOf { it.amountPaise }
+    val todayTotal = todayGross - todayRefunds
     val formatter = remember { SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()) }
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -50,21 +60,14 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
             val target = sales.firstOrNull { it.id == id }
             AlertDialog(
                 onDismissRequest = { refundSaleId = null },
-                title = { Text("Refund full bill?") },
+                title = { Text("Refund remaining bill balance?") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("This records a full-bill refund. Choose the physical stock outcome; served or opened food must not return to usable stock.")
-                        Text("Cash: ₹%.2f • UPI: ₹%.2f".format((target?.cashPaidPaise ?: 0L) / 100.0, (target?.upiPaidPaise ?: 0L) / 100.0))
+                        Text("This refunds only the bill units that have not already been refunded. Each returned food unit is recorded as wastage and never returned to Store or Kitchen stock.")
+                        Text("The remaining amount and original Cash / UPI tender allocation are calculated from the recorded refund history.")
                         OutlinedTextField(refundReason, { refundReason = it }, label = { Text("Refund reason") }, modifier = Modifier.fillMaxWidth())
-                        Text("Food / ingredient disposition", fontWeight = FontWeight.SemiBold)
-                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            RadioButton(selected = refundStockDisposition == "WASTED", onClick = { refundStockDisposition = "WASTED" })
-                            Text("Served, opened or unsafe — record as wastage")
-                        }
-                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            RadioButton(selected = refundStockDisposition == "RESTOCK", onClick = { refundStockDisposition = "RESTOCK" })
-                            Text("Returned unopened and safe — restock")
-                        }
+                        Text("Food refund reason (required)", fontWeight = FontWeight.SemiBold)
+                        Text("The reason is saved against the wastage entries for the recipe ingredients. Refunded food is not reusable stock.")
                         Text("Cash refunds require an open cash shift. UPI refunds must also be reversed in the UPI app.", style = MaterialTheme.typography.bodySmall)
                     }
                 },
@@ -73,13 +76,82 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
                         val sale = target ?: return@TextButton
                         refundSaleId = null
                         scope.launch {
-                            runCatching { db.dao().refundCompletedSale(sale.id, refundReason, System.currentTimeMillis(), sale.cashPaidPaise, sale.upiPaidPaise, currentStaff.id, currentStaff.name, refundStockDisposition) }
-                                .onSuccess { message = if (refundStockDisposition == "RESTOCK") "Full refund recorded; returned stock restored." else "Full refund recorded; consumed stock remains consumed and is recorded as wastage." }
+                            runCatching { db.dao().refundRemainingSaleBalance(sale.id, refundReason, System.currentTimeMillis(), currentStaff.id, currentStaff.name) }
+                                .onSuccess { message = "Remaining bill balance refunded. Returned food was logged as wastage; stock was not increased." }
                                 .onFailure { message = it.message ?: "Refund failed." }
                         }
                     }) { Text("Confirm refund") }
                 },
                 dismissButton = { TextButton(onClick = { refundSaleId = null }) { Text("Cancel") } }
+            )
+        }
+        partialRefundSaleId?.let { saleId ->
+            val targetSale = sales.firstOrNull { it.id == saleId }
+            val selectedLine = partialRefundLines.firstOrNull { it.id == partialRefundLineId }
+            val remainingForLine = selectedLine?.let { it.quantity - (partialRefundedByLine[it.id] ?: 0) } ?: 0
+            AlertDialog(
+                onDismissRequest = { partialRefundSaleId = null },
+                title = { Text("Refund item quantity") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Select the sold item and quantity. Each returned food unit is recorded as wastage against its original FIFO ingredient lots. Usable stock is never increased.")
+                        partialRefundLines.forEach { line ->
+                            val remaining = line.quantity - (partialRefundedByLine[line.id] ?: 0)
+                            if (remaining > 0) {
+                                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                    RadioButton(
+                                        selected = partialRefundLineId == line.id,
+                                        onClick = { partialRefundLineId = line.id; partialRefundQuantity = "1" }
+                                    )
+                                    Column {
+                                        Text("${line.itemName} • ${line.quantity} sold • $remaining refundable")
+                                        Text("₹%.2f each".format(line.unitPricePaise / 100.0), style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+                        }
+                        OutlinedTextField(
+                            partialRefundQuantity,
+                            { partialRefundQuantity = it.filter { ch -> ch.isDigit() }.take(4) },
+                            label = { Text("Quantity to refund (max $remainingForLine)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            partialRefundReason,
+                            { partialRefundReason = it },
+                            label = { Text("Food refund reason (required)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text("Cash refunds require an open cash shift. Reverse UPI payments in the UPI app. Old bills without per-unit FIFO traceability are blocked rather than guessed.", style = MaterialTheme.typography.bodySmall)
+                    }
+                },
+                confirmButton = {
+                    val quantity = partialRefundQuantity.toIntOrNull()
+                    TextButton(
+                        enabled = targetSale != null && selectedLine != null && quantity != null && quantity in 1..remainingForLine && partialRefundReason.isNotBlank(),
+                        onClick = {
+                            val sale = targetSale ?: return@TextButton
+                            val line = selectedLine ?: return@TextButton
+                            val qty = quantity ?: return@TextButton
+                            partialRefundSaleId = null
+                            scope.launch {
+                                runCatching {
+                                    db.dao().refundSaleLineQuantity(
+                                        sale.id, line.id, qty, partialRefundReason.trim(),
+                                        System.currentTimeMillis(), currentStaff.id, currentStaff.name
+                                    )
+                                }.onSuccess {
+                                    message = "Refunded $qty × ${line.itemName}. Returned food was recorded as wastage; usable stock was unchanged."
+                                }.onFailure {
+                                    message = it.message ?: "Item refund failed."
+                                }
+                            }
+                        }
+                    ) { Text("Confirm item refund") }
+                },
+                dismissButton = { TextButton(onClick = { partialRefundSaleId = null }) { Text("Cancel") } }
             )
         }
         Text("Sales overview", color = HistoryGold, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -91,7 +163,7 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
         if (sales.isEmpty()) {
             Text("No sales recorded yet. Completed POS bills will appear here.", color = HistoryIvory)
         } else {
-            LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(sales, key = { it.id }) { sale ->
                     Card(colors = CardDefaults.cardColors(containerColor = HistoryPanel)) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -115,8 +187,21 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
                                         scope.launch { selectedLines = db.dao().saleLines(sale.id); selectedCostPaise = db.dao().saleCost(sale.id)?.ingredientCostPaise ?: 0L }
                                     }
                                 }) { Text(if (expandedSaleId == sale.id) "Hide items" else "View items", color = HistoryGold) }
-                                if (sale.status == "COMPLETED") {
-                                    TextButton(onClick = { refundSaleId = sale.id; refundReason = "Customer return" }) { Text("Refund", color = Color(0xFFFFB59A)) }
+                                if (sale.status == "COMPLETED" || sale.status == "PARTIALLY_REFUNDED") {
+                                    TextButton(onClick = { refundSaleId = sale.id; refundReason = "Customer return" }) { Text(if (sale.status == "PARTIALLY_REFUNDED") "Refund remaining" else "Full refund", color = Color(0xFFFFB59A)) }
+                                }
+                                if (sale.status == "COMPLETED" || sale.status == "PARTIALLY_REFUNDED") {
+                                    TextButton(onClick = {
+                                        partialRefundSaleId = sale.id
+                                        partialRefundLineId = null
+                                        partialRefundQuantity = "1"
+                                        partialRefundReason = "Customer return"
+                                        scope.launch {
+                                            partialRefundLines = db.dao().saleLines(sale.id)
+                                            val refunds = db.dao().saleLineRefunds(sale.id)
+                                            partialRefundedByLine = refunds.groupBy { it.saleLineId }.mapValues { (_, rows) -> rows.sumOf { it.refundedQuantity } }
+                                        }
+                                    }) { Text("Refund items", color = Color(0xFFFFB59A)) }
                                 }
                             }
                             if (expandedSaleId == sale.id) {

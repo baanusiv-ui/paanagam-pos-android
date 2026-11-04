@@ -6,13 +6,13 @@ plugins {
 }
 android {
     namespace = "in.paanagam.business"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         applicationId = "in.paanagam.business"
         minSdk = 26
         targetSdk = 35
-        versionCode = 70
-        versionName = "0.2.9"
+        versionCode = 73
+        versionName = "0.3.2"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -22,6 +22,9 @@ android {
         jvmTarget = "17"
     }
     buildFeatures { compose = true }
+}
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
@@ -38,9 +41,11 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-exoplayer-rtsp:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1")
+    implementation("androidx.sqlite:sqlite:2.7.0")
+    implementation("net.zetetic:sqlcipher-android:4.20.0@aar")
+    implementation("androidx.room:room-runtime:2.8.5")
+    implementation("androidx.room:room-ktx:2.8.5")
+    ksp("androidx.room:room-compiler:2.8.5")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")

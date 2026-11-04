@@ -17,13 +17,15 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.UUID
 
-private data class PlanStockLine(val name: String, val required: Long, val available: Long, val unit: String)
+private data class PlanStockLine(val ingredientId: String, val name: String, val required: Long, val available: Long, val unit: String)
 
 @Composable
 fun NextDayPlanningScreen(db: PaanagamDatabase) {
     val catalog by db.dao().catalog().collectAsState(initial = emptyList())
     val ingredients by db.dao().ingredients().collectAsState(initial = emptyList())
     val plans by db.dao().nextDayPlans().collectAsState(initial = emptyList())
+    val allRecipes by db.dao().allRecipeLines().collectAsState(initial = emptyList())
+    val allCombos by db.dao().allComboComponents().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val gold = Color(0xFF16845B)
     val ink = Color(0xFF20332B)
@@ -36,24 +38,50 @@ fun NextDayPlanningScreen(db: PaanagamDatabase) {
     var loading by remember { mutableStateOf(false) }
     val dayPlans = plans.filter { it.planDate == planDate }
     LaunchedEffect(catalog) { if (menuId.isBlank() && catalog.isNotEmpty()) menuId = catalog.first().id }
-    LaunchedEffect(planDate, dayPlans, ingredients) {
+    LaunchedEffect(planDate, dayPlans, ingredients, allRecipes, allCombos) {
         loading = true
-        val totals = mutableMapOf<String, Long>()
-        dayPlans.forEach { plan ->
-            db.dao().recipeLines(plan.menuItemId).forEach { line ->
-                totals[line.ingredientId] = (totals[line.ingredientId] ?: 0L) + line.quantityBaseUnits * plan.plannedQuantity
+        try {
+            val totals = mutableMapOf<String, Long>()
+            suspend fun expandRequirements(menuItemId: String, multiplier: Long, path: Set<String>) {
+                require(menuItemId !in path) { "Circular combo detected in preparation plan." }
+                require(multiplier > 0L) { "Planned component quantity must be positive." }
+                val nextPath = path + menuItemId
+                val components = db.dao().comboComponents(menuItemId)
+                if (components.isNotEmpty()) {
+                    components.forEach { component ->
+                        require(component.quantity > 0) { "Combo component quantity is invalid." }
+                        val componentMultiplier = Math.multiplyExact(multiplier, component.quantity.toLong())
+                        expandRequirements(component.componentItemId, componentMultiplier, nextPath)
+                    }
+                } else {
+                    val recipe = db.dao().recipeLines(menuItemId)
+                    require(recipe.isNotEmpty()) { "Recipe missing for planned item or combo component (ID: $menuItemId)." }
+                    recipe.forEach { line ->
+                        require(line.quantityBaseUnits > 0L) { "Recipe quantity must be positive." }
+                        val required = Math.multiplyExact(line.quantityBaseUnits, multiplier)
+                        totals[line.ingredientId] = Math.addExact(totals[line.ingredientId] ?: 0L, required)
+                    }
+                }
             }
+            dayPlans.forEach { plan ->
+                require(plan.plannedQuantity > 0) { "Planned quantity must be positive." }
+                expandRequirements(plan.menuItemId, plan.plannedQuantity.toLong(), emptySet())
+            }
+            stockLines = totals.mapNotNull { (ingredientId, required) ->
+                val item = ingredients.firstOrNull { it.id == ingredientId } ?: error("A planned recipe references a missing ingredient.")
+                PlanStockLine(item.id, item.name, required, db.dao().stockBalance(item.id, "KITCHEN"), item.baseUnit)
+            }.sortedBy { it.name }
+        } catch (error: Exception) {
+            stockLines = emptyList()
+            if (dayPlans.isNotEmpty()) message = error.message ?: "Could not calculate preparation requirements."
+        } finally {
+            loading = false
         }
-        stockLines = totals.mapNotNull { (ingredientId, required) ->
-            val item = ingredients.firstOrNull { it.id == ingredientId } ?: return@mapNotNull null
-            PlanStockLine(item.name, required, db.dao().stockBalance(item.id, "KITCHEN"), item.baseUnit)
-        }.sortedBy { it.name }
-        loading = false
     }
     val shortageCount = stockLines.count { it.available < it.required }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(9.dp)) {
         Text("Next-day preparation plan", color = gold, style = MaterialTheme.typography.titleLarge)
-        Text("Plan menu quantities and compare recipe requirements with current Kitchen stock.", color = muted, style = MaterialTheme.typography.bodySmall)
+        Text("Plan menu quantities and compare recipe requirements with current Kitchen stock. Combo quantities are expanded into their component recipes.", color = muted, style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(planDate, { value ->
             if (value.length <= 10 && value.all { it.isDigit() || it == '-' }) planDate = value
         }, label = { Text("Plan date (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -76,7 +104,19 @@ fun NextDayPlanningScreen(db: PaanagamDatabase) {
                 else if (item == null || qty == null || qty <= 0) message = "Choose a menu item and quantity greater than zero."
                 else scope.launch {
                     runCatching {
-                        require(db.dao().recipeLines(item.id).isNotEmpty()) { "Configure this menu item's recipe before planning." }
+                        val visiting = mutableSetOf<String>()
+                        suspend fun validateRecipeTree(itemId: String) {
+                            require(visiting.add(itemId)) { "Circular combo detected. Correct the combo components before planning." }
+                            val parts = db.dao().comboComponents(itemId)
+                            if (parts.isEmpty()) {
+                                require(db.dao().recipeLines(itemId).isNotEmpty()) { "Configure a recipe for every menu item and combo component before planning." }
+                            } else {
+                                require(parts.all { it.quantity > 0 }) { "Combo component quantity must be positive." }
+                                parts.forEach { validateRecipeTree(it.componentItemId) }
+                            }
+                            visiting.remove(itemId)
+                        }
+                        validateRecipeTree(item.id)
                         db.dao().insertNextDayPlan(NextDayPlan(UUID.randomUUID().toString(), planDate, item.id, item.name, qty, "PLANNED", System.currentTimeMillis()))
                     }.onSuccess { message = "Plan item saved."; quantity = "1" }
                         .onFailure { message = it.message ?: "Could not save plan." }
@@ -106,11 +146,11 @@ fun NextDayPlanningScreen(db: PaanagamDatabase) {
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Kitchen stock check", color = ink, style = MaterialTheme.typography.titleMedium)
-            Text(if (loading) "Checking…" else if (shortageCount == 0) "Covered" else "$shortageCount short", color = if (shortageCount == 0) gold else Color(0xFFC26A27))
+            Text(if (loading) "Checking…" else if (shortageCount == 0) "Covered" else "${shortageCount} short", color = if (shortageCount == 0) gold else Color(0xFFC26A27))
         }
-        if (stockLines.isEmpty()) Text("Recipe-linked ingredient needs will appear here after adding plan items.", color = muted, style = MaterialTheme.typography.bodySmall)
+        if (stockLines.isEmpty()) Text("Recipe-linked ingredient needs will appear here after adding plan items. Any missing recipe or circular combo is shown above.", color = muted, style = MaterialTheme.typography.bodySmall)
         else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            items(stockLines, key = { it.name }) { line ->
+            items(stockLines, key = { it.ingredientId }) { line ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f)) {
                         Text(line.name, color = ink)

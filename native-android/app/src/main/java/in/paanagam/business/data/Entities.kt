@@ -6,7 +6,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "catalog_items")
-data class CatalogItem(@PrimaryKey val id: String, val name: String, val category: String, val pricePaise: Long, val active: Boolean = true, val isCoffee: Boolean = false)
+data class CatalogItem(@PrimaryKey val id: String, val name: String, val category: String, val pricePaise: Long, val active: Boolean = true, val isCoffee: Boolean = false, @ColumnInfo(defaultValue = "''") val sku: String = "")
 
 @Entity(tableName = "ingredients")
 data class Ingredient(@PrimaryKey val id: String, val name: String, val baseUnit: String, val isCoffeePowder: Boolean = false, val active: Boolean = true, val storeMinStockBaseUnits: Long = 0L, val kitchenMinStockBaseUnits: Long = 0L)
@@ -20,8 +20,8 @@ data class PurchaseLine(@PrimaryKey val id: String, val purchaseId: String, val 
 @Entity(tableName = "stock_transfers")
 data class StockTransfer(@PrimaryKey val id: String, val fromLocation: String, val toLocation: String, val transferredAt: Long, val status: String = "COMPLETED")
 
-@Entity(tableName = "stock_movements")
-data class StockMovement(@PrimaryKey val id: String, val ingredientId: String, val lotId: String, val movementType: String, val fromLocation: String, val toLocation: String, val quantityBaseUnits: Long, val unitCostPaise: Long, val referenceId: String, val createdAt: Long)
+@Entity(tableName = "stock_movements", indices = [Index(value = ["saleLineId"]), Index(value = ["saleLineId", "saleUnitIndex"])])
+data class StockMovement(@PrimaryKey val id: String, val ingredientId: String, val lotId: String, val movementType: String, val fromLocation: String, val toLocation: String, val quantityBaseUnits: Long, val unitCostPaise: Long, val referenceId: String, val createdAt: Long, val saleLineId: String? = null, val saleUnitIndex: Int? = null)
 
 @Entity(tableName = "stock_lots")
 data class StockLot(@PrimaryKey val id: String, val ingredientId: String, val location: String, val receivedAt: Long, val qtyBaseUnits: Long, val remainingBaseUnits: Long, val unit: String, val unitCostPaise: Long, val sourceLotId: String? = null)
@@ -32,11 +32,11 @@ data class ProductionBatch(@PrimaryKey val id: String, val productName: String, 
 @Entity(tableName = "production_inputs")
 data class ProductionInput(@PrimaryKey val id: String, val batchId: String, val ingredientId: String, val quantityBaseUnits: Long, val costPaise: Long)
 
-@Entity(tableName = "wastage_records")
-data class WastageRecord(@PrimaryKey val id: String, val ingredientId: String, val location: String, val quantityBaseUnits: Long, val reason: String, val recordedAt: Long, val costPaise: Long)
+@Entity(tableName = "wastage_records", indices = [Index(value = ["sourceId"]), Index(value = ["sourceLineId"])])
+data class WastageRecord(@PrimaryKey val id: String, val ingredientId: String, val location: String, val quantityBaseUnits: Long, val reason: String, val recordedAt: Long, val costPaise: Long, @ColumnInfo(defaultValue = "'MANUAL'") val sourceType: String = "MANUAL", val sourceId: String? = null, val sourceLineId: String? = null, @ColumnInfo(defaultValue = "1") val stockAdjusted: Boolean = true)
 
 @Entity(tableName = "sales")
-data class Sale(@PrimaryKey val id: String, val createdAt: Long, val totalPaise: Long, val paymentMethod: String, val status: String = "COMPLETED", val syncState: String = "LOCAL", val customerPhone: String = "", val shiftId: String? = null, @ColumnInfo(defaultValue = "0") val cashPaidPaise: Long = 0L, @ColumnInfo(defaultValue = "0") val upiPaidPaise: Long = 0L)
+data class Sale(@PrimaryKey val id: String, val createdAt: Long, val totalPaise: Long, val paymentMethod: String, val status: String = "COMPLETED", val syncState: String = "LOCAL", val customerPhone: String = "", val shiftId: String? = null, @ColumnInfo(defaultValue = "0") val cashPaidPaise: Long = 0L, @ColumnInfo(defaultValue = "0") val upiPaidPaise: Long = 0L, @ColumnInfo(defaultValue = "DINE_IN") val orderType: String = "DINE_IN")
 
 @Entity(tableName = "sop_documents")
 data class SopDocument(@PrimaryKey val id: String, val title: String, val category: String, val version: Int, val status: String, val instructions: String, val updatedAt: Long)
@@ -132,7 +132,7 @@ data class KitchenTicket(@PrimaryKey val saleId: String, val status: String = "N
 
 
 @Entity(tableName = "held_orders")
-data class HeldOrder(@PrimaryKey val id: String, val createdAt: Long, val customerPhone: String, val totalPaise: Long)
+data class HeldOrder(@PrimaryKey val id: String, val createdAt: Long, val customerPhone: String, val totalPaise: Long, @ColumnInfo(defaultValue = "DINE_IN") val orderType: String = "DINE_IN")
 
 @Entity(tableName = "held_order_lines", indices = [Index(value = ["orderId"])])
 data class HeldOrderLine(@PrimaryKey val id: String, val orderId: String, val itemId: String, val itemName: String, val quantity: Int, val unitPricePaise: Long)
@@ -148,6 +148,21 @@ data class SalesReconciliation(
     val countedCashPaise: Long,
     val note: String,
     val reconciledAt: Long
+)
+
+@Entity(tableName = "sale_line_refunds", indices = [Index(value = ["saleId"]), Index(value = ["saleLineId"]), Index(value = ["saleLineId", "saleUnitIndex"], unique = true)])
+data class SaleLineRefund(
+    @PrimaryKey val id: String,
+    val saleId: String,
+    val saleLineId: String,
+    val refundedQuantity: Int,
+    @ColumnInfo(defaultValue = "-1") val saleUnitIndex: Int,
+    val amountPaise: Long,
+    val cashRefundPaise: Long,
+    val upiRefundPaise: Long,
+    val stockDisposition: String,
+    val reason: String,
+    val refundedAt: Long
 )
 
 @Entity(tableName = "sale_refunds", indices = [Index(value = ["saleId"])])
@@ -177,4 +192,18 @@ data class CctvAuditEvent(
     val createdAt: Long,
     val cameraBookmarkStatus: String = "LOCAL_BOOKMARK",
     val clipReference: String = ""
+)
+
+
+@Entity(tableName = "loyalty_ledger", indices = [Index(value = ["phone", "createdAt"]), Index(value = ["saleId"]), Index(value = ["reversesEntryId"], unique = true)])
+data class LoyaltyLedgerEntry(
+    @PrimaryKey val id: String,
+    val phone: String,
+    val saleId: String,
+    val entryType: String,
+    val coffeeDelta: Int,
+    val rewardDelta: Int,
+    val lifetimeDelta: Int,
+    val createdAt: Long,
+    val reversesEntryId: String? = null
 )

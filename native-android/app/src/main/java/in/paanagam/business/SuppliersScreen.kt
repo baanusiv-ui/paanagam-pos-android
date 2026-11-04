@@ -1,9 +1,8 @@
 package `in`.paanagam.business
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -28,7 +27,7 @@ fun SuppliersScreen(db: PaanagamDatabase) {
     var notes by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
 
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(9.dp)) {
         Text("Supplier register", color = Color(0xFF16845B), style = MaterialTheme.typography.titleLarge)
         Text("Save supplier details for purchase records. Existing purchase entries remain unchanged.", color = Color(0xFF65736B), style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(name, { name = it }, label = { Text("Supplier / business name *") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -49,8 +48,8 @@ fun SuppliersScreen(db: PaanagamDatabase) {
         }, modifier = Modifier.fillMaxWidth()) { Text("Save supplier") }
         if (message.isNotBlank()) Text(message, color = Color(0xFF16845B))
         Text("Saved suppliers • ${suppliers.size}", color = Color(0xFF20332B), style = MaterialTheme.typography.titleMedium)
-        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            items(suppliers, key = { it.id }) { supplier ->
+        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            suppliers.forEach { supplier ->
                 Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(13.dp)) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
