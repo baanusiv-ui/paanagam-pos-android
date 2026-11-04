@@ -29,7 +29,11 @@ fun LoyaltyScreen(db: PaanagamDatabase) {
                         Text(account.customerName, color = Color(0xFF263A32), fontWeight = FontWeight.Bold)
                         Text(account.phone, color = Color(0xFF718078))
                         LinearProgressIndicator(progress = { account.coffeeProgress / 10f }, modifier = Modifier.fillMaxWidth())
-                        Text("${account.coffeeProgress}/10 coffees • ${account.freeCoffeesAvailable} free coffee reward(s) available", color = Color(0xFF16845B))
+                        if (account.freeCoffeesAvailable >= 0) {
+                            Text("${account.coffeeProgress}/10 coffees • ${account.freeCoffeesAvailable} free coffee reward(s) available", color = Color(0xFF16845B))
+                        } else {
+                            Text("${account.coffeeProgress}/10 coffees • ${-account.freeCoffeesAvailable} future reward(s) will offset refunded rewards before redemption", color = Color(0xFFC26A27))
+                        }
                         Text("Lifetime coffee servings: ${account.lifetimeCoffeeCount}", color = Color(0xFF718078), style = MaterialTheme.typography.labelSmall)
                     }
                 }
