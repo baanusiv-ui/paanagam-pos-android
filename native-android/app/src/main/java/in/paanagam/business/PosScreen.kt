@@ -43,6 +43,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
     val scope = rememberCoroutineScope()
 
     var search by remember { mutableStateOf("") }
+    var orderMode by remember { mutableStateOf("DINE_IN") }
     var selectedCategory by remember { mutableStateOf("All") }
     var cart by remember { mutableStateOf<Map<String, Pair<CatalogItem, Int>>>(emptyMap()) }
     var payment by remember { mutableStateOf("CASH") }
@@ -171,6 +172,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                                             line.itemId to (item to line.quantity)
                                         }
                                         cart = restored
+                                        orderMode = held.orderType
                                         customerPhone = held.customerPhone
                                         db.dao().removeHeldOrder(held.id)
                                         showHeldOrders = false
@@ -236,6 +238,8 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                 PosMenuPanel(
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     saving = saving,
+                    orderMode = orderMode,
+                    onOrderMode = { orderMode = it },
                     categories = categories,
                     selectedCategory = selectedCategory,
                     onCategory = { selectedCategory = it },
@@ -448,6 +452,8 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
 private fun PosMenuPanel(
     modifier: Modifier,
     saving: Boolean,
+    orderMode: String,
+    onOrderMode: (String) -> Unit,
     categories: List<String>,
     selectedCategory: String,
     onCategory: (String) -> Unit,
@@ -472,14 +478,13 @@ private fun PosMenuPanel(
     onNewIsCoffee: (Boolean) -> Unit,
     onSaveNew: () -> Unit
 ) {
-    var orderMode by remember { mutableStateOf("DINE_IN") }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.weight(1f).background(Color(0xFFF1E8D7), RoundedCornerShape(24.dp)).padding(3.dp)) {
                 listOf("DINE_IN" to "Dine In", "TAKEAWAY" to "Takeaway").forEach { (mode, label) ->
                     val selected = orderMode == mode
                     TextButton(
-                        onClick = { orderMode = mode },
+                        onClick = { onOrderMode(mode) },
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
                         colors = ButtonDefaults.textButtonColors(
