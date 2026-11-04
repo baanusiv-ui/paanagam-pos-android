@@ -473,16 +473,34 @@ private fun PosMenuPanel(
     onSaveNew: () -> Unit
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Counter POS", color = PosWalnut, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text("பானகம்  •  காபியும் கதையும்", color = PosMuted, style = MaterialTheme.typography.labelMedium)
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            if (maxWidth < 560.dp) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Counter POS", color = PosWalnut, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text("OFFLINE READY", color = PosBrown, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.background(Color(0xFFF3E6C9), RoundedCornerShape(20.dp)).padding(horizontal = 9.dp, vertical = 6.dp))
+                    }
+                    Text("பானகம் • காபியும் கதையும்", color = PosMuted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = onShowHeld, enabled = !saving, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Held $heldCount", color = PosOrange) }
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = onToggleAdd, enabled = !saving, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(if (showAddItem) "Close" else "+ Menu item", color = PosBrown) }
+                    }
+                }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Counter POS", color = PosWalnut, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text("பானகம்  •  காபியும் கதையும்", color = PosMuted, style = MaterialTheme.typography.labelMedium)
+                    }
+                    Text("OFFLINE READY", color = PosBrown, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.background(Color(0xFFF3E6C9), RoundedCornerShape(20.dp)).padding(horizontal = 10.dp, vertical = 7.dp))
+                    TextButton(onClick = onShowHeld, enabled = !saving) { Text("Held $heldCount", color = PosOrange) }
+                    Spacer(Modifier.width(6.dp))
+                    TextButton(onClick = onToggleAdd, enabled = !saving) { Text(if (showAddItem) "Close" else "+ Menu item", color = PosBrown) }
+                }
             }
-            Text("OFFLINE READY", color = PosBrown, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
-                modifier = Modifier.background(Color(0xFFF3E6C9), RoundedCornerShape(20.dp)).padding(horizontal = 10.dp, vertical = 7.dp))
-            TextButton(onClick = onShowHeld, enabled = !saving) { Text("Held $heldCount", color = PosOrange) }
-            Spacer(Modifier.width(6.dp))
-            TextButton(onClick = onToggleAdd, enabled = !saving) { Text(if (showAddItem) "Close" else "+ Menu item", color = PosBrown) }
         }
         if (showAddItem) {
             Card(colors = CardDefaults.cardColors(containerColor = PosIvory)) {
