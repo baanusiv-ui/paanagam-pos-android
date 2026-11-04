@@ -768,7 +768,7 @@ private fun PosCartPanel(
         var showCustomerDetails by remember { mutableStateOf(false) }
         var expanded by remember { mutableStateOf(false) }
         Card(
-            modifier.fillMaxWidth().heightIn(max = 250.dp),
+            modifier.fillMaxWidth().heightIn(max = if (expanded) 360.dp else 112.dp),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = PosWalnut)
         ) {
