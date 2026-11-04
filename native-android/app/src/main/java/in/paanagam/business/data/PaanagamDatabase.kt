@@ -279,31 +279,39 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         var totalIngredientCost = 0L
         lines.forEach { line ->
             require(line.quantity > 0)
+            // Build one menu-unit recipe, then consume it unit-by-unit. This preserves
+            // exact FIFO lot attribution for every sale unit, enabling safe quantity refunds.
+            val perUnitRequirements = mutableMapOf<String, Long>()
             val components = comboComponents(line.itemId)
-            val requirements = mutableMapOf<String, Long>()
             if (components.isNotEmpty()) {
                 components.forEach { component ->
                     val componentRecipe = recipeLines(component.componentItemId)
                     require(componentRecipe.isNotEmpty()) { "Recipe missing for combo component ${component.componentName}." }
                     componentRecipe.forEach { recipe ->
-                        val qty = Math.multiplyExact(Math.multiplyExact(recipe.quantityBaseUnits, component.quantity.toLong()), line.quantity.toLong())
-                        requirements[recipe.ingredientId] = Math.addExact(requirements[recipe.ingredientId] ?: 0L, qty)
+                        val qty = Math.multiplyExact(recipe.quantityBaseUnits, component.quantity.toLong())
+                        perUnitRequirements[recipe.ingredientId] = Math.addExact(perUnitRequirements[recipe.ingredientId] ?: 0L, qty)
                     }
                 }
             } else {
                 val configuredRecipe = recipeLines(line.itemId)
                 require(configuredRecipe.isNotEmpty()) { "Recipe missing for ${line.itemName}. Configure its ingredients before selling." }
                 configuredRecipe.forEach { recipe ->
-                    val qty = Math.multiplyExact(recipe.quantityBaseUnits, line.quantity.toLong())
-                    requirements[recipe.ingredientId] = Math.addExact(requirements[recipe.ingredientId] ?: 0L, qty)
+                    perUnitRequirements[recipe.ingredientId] = Math.addExact(perUnitRequirements[recipe.ingredientId] ?: 0L, recipe.quantityBaseUnits)
                 }
             }
-            requirements.forEach { (ingredientId, required) ->
+            perUnitRequirements.forEach { (ingredientId, _) ->
                 val ingredient = ingredient(ingredientId) ?: error("Recipe ingredient not found.")
                 require(!ingredient.isCoffeePowder) {
                     "Coffee powder is a production ingredient. Prepare decoction first; POS recipes must consume decoction, milk and sugar."
                 }
-                totalIngredientCost = Math.addExact(totalIngredientCost, consumeFifo(ingredientId, "KITCHEN", required, sale.id, "SALE_CONSUMPTION", sale.createdAt, line.id))
+            }
+            for (unitIndex in 0 until line.quantity) {
+                perUnitRequirements.forEach { (ingredientId, requiredPerUnit) ->
+                    totalIngredientCost = Math.addExact(totalIngredientCost, consumeFifo(
+                        ingredientId, "KITCHEN", requiredPerUnit, sale.id, "SALE_CONSUMPTION",
+                        sale.createdAt, line.id, unitIndex
+                    ))
+                }
             }
         }
         recordSale(saleWithShift)
@@ -473,7 +481,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
 
 
     @Transaction
-    suspend fun consumeFifo(ingredientId: String, location: String, quantity: Long, referenceId: String, movementType: String, at: Long, saleLineId: String? = null): Long {
+    suspend fun consumeFifo(ingredientId: String, location: String, quantity: Long, referenceId: String, movementType: String, at: Long, saleLineId: String? = null, saleUnitIndex: Int? = null): Long {
         require(quantity > 0)
         val lots = fifoLots(ingredientId, location)
         require(lots.sumOf { it.remainingBaseUnits } >= quantity) { "Insufficient stock" }
@@ -484,7 +492,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
                 val take = minOf(left, lot.remainingBaseUnits)
                 updateLotBalance(lot.id, lot.remainingBaseUnits - take)
                 lotTakes += take to lot.unitCostPaise
-                insertStockMovement(StockMovement(UUID.randomUUID().toString(), ingredientId, lot.id, movementType, location, "", take, lot.unitCostPaise, referenceId, at, saleLineId))
+                insertStockMovement(StockMovement(UUID.randomUUID().toString(), ingredientId, lot.id, movementType, location, "", take, lot.unitCostPaise, referenceId, at, saleLineId, saleUnitIndex))
                 left -= take
             }
         }
@@ -565,7 +573,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, CashMovement::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class, HeldOrder::class, HeldOrderLine::class, SalesReconciliation::class, SaleRefund::class, SaleLineRefund::class, DeviceBinding::class, CctvAuditEvent::class, LoyaltyLedgerEntry::class], version = 29, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, CashMovement::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class, HeldOrder::class, HeldOrderLine::class, SalesReconciliation::class, SaleRefund::class, SaleLineRefund::class, DeviceBinding::class, CctvAuditEvent::class, LoyaltyLedgerEntry::class], version = 30, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
