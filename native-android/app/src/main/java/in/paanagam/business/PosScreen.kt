@@ -498,51 +498,129 @@ private fun PosMenuPanel(
                 }
             }
         }
-        OutlinedTextField(search, onSearch, modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !saving, placeholder = { Text("Search menu items…") })
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(categories) { category ->
-                    FilterChip(selected = selectedCategory == category, onClick = { onCategory(category) }, enabled = !saving, label = { Text(category) })
-                }
-            }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("Menu", color = PosWalnut, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text("${items.size} items", color = PosMuted, style = MaterialTheme.typography.labelSmall)
-        }
-        if (items.isEmpty()) {
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = PosIvory)) {
-                Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("☕", style = MaterialTheme.typography.headlineLarge)
-                    Text("No menu items found", color = PosWalnut, fontWeight = FontWeight.SemiBold)
-                    Text("Add a menu item or change the search.", color = PosMuted, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-        } else {
-            BoxWithConstraints(Modifier.weight(1f)) {
-                val columns = when { maxWidth >= 900.dp -> 4; maxWidth >= 560.dp -> 3; else -> 2 }
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(columns),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    gridItems(items, key = { it.id }) { item ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth().clickable(enabled = !saving) { onAdd(item) },
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                        ) {
-                            Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Box(Modifier.fillMaxWidth().height(54.dp).background(Color(0xFFF7F0E4), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
-                                    Text(menuEmoji(item.name), style = MaterialTheme.typography.headlineMedium)
+        OutlinedTextField(
+            value = search,
+            onValueChange = onSearch,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            enabled = !saving,
+            placeholder = { Text("Search product name or code") },
+            shape = RoundedCornerShape(12.dp)
+        )
+        BoxWithConstraints(Modifier.weight(1f)) {
+            val columns = when { maxWidth >= 900.dp -> 3; maxWidth >= 560.dp -> 3; else -> 2 }
+            if (maxWidth >= 560.dp) {
+                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(
+                        Modifier.width(154.dp).fillMaxHeight()
+                            .background(Color(0xFFF4F1EC), RoundedCornerShape(14.dp)).padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text("CATEGORIES", color = PosMuted, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        categories.forEach { category ->
+                            TextButton(
+                                onClick = { onCategory(category) },
+                                enabled = !saving,
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)
+                            ) {
+                                Text(
+                                    category,
+                                    color = if (selectedCategory == category) PosOrange else PosBrown,
+                                    fontWeight = if (selectedCategory == category) FontWeight.Bold else FontWeight.Normal,
+                                    maxLines = 2
+                                )
+                            }
+                        }
+                    }
+                    Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (selectedCategory == "All") "All products" else selectedCategory, color = PosWalnut, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("${items.size} items", color = PosMuted, style = MaterialTheme.typography.labelSmall)
+                        }
+                        if (items.isEmpty()) {
+                            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = PosIvory)) {
+                                Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("☕", style = MaterialTheme.typography.headlineLarge)
+                                    Text("No menu items found", color = PosWalnut, fontWeight = FontWeight.SemiBold)
+                                    Text("Add a menu item or change the search.", color = PosMuted, style = MaterialTheme.typography.bodySmall)
                                 }
-                                Text(item.name, color = PosWalnut, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 2, minLines = 2)
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                    Text("₹${"%.2f".format(item.pricePaise / 100.0)}", color = PosBrown, fontWeight = FontWeight.Bold)
-                                    Text("+ Add", color = PosOrange, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(columns),
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(bottom = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                gridItems(items, key = { it.id }) { item ->
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth().clickable(enabled = !saving) { onAdd(item) },
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                                    ) {
+                                        Column(Modifier.fillMaxWidth().padding(9.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Box(Modifier.fillMaxWidth().height(86.dp).background(Color(0xFFF7F0E4), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+                                                Text(menuEmoji(item.name), style = MaterialTheme.typography.headlineLarge)
+                                            }
+                                            Text(item.name, color = PosWalnut, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 2, minLines = 2)
+                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                                Text("₹${"%.2f".format(item.pricePaise / 100.0)}", color = PosBrown, fontWeight = FontWeight.Bold)
+                                                Text("+ Add", color = PosOrange, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(categories) { category ->
+                            FilterChip(selected = selectedCategory == category, onClick = { onCategory(category) }, enabled = !saving, label = { Text(category) })
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (selectedCategory == "All") "All products" else selectedCategory, color = PosWalnut, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("${items.size} items", color = PosMuted, style = MaterialTheme.typography.labelSmall)
+                    }
+                    if (items.isEmpty()) {
+                        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = PosIvory)) {
+                            Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("☕", style = MaterialTheme.typography.headlineLarge)
+                                Text("No menu items found", color = PosWalnut, fontWeight = FontWeight.SemiBold)
+                                Text("Add a menu item or change the search.", color = PosMuted, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(columns),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            gridItems(items, key = { it.id }) { item ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().clickable(enabled = !saving) { onAdd(item) },
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                                ) {
+                                    Column(Modifier.fillMaxWidth().padding(9.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                        Box(Modifier.fillMaxWidth().height(64.dp).background(Color(0xFFF7F0E4), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+                                            Text(menuEmoji(item.name), style = MaterialTheme.typography.headlineMedium)
+                                        }
+                                        Text(item.name, color = PosWalnut, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 2, minLines = 2)
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                            Text("₹${"%.2f".format(item.pricePaise / 100.0)}", color = PosBrown, fontWeight = FontWeight.Bold)
+                                            Text("+ Add", color = PosOrange, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                 }
                             }
                         }
