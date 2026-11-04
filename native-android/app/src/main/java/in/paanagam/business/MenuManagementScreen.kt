@@ -12,6 +12,7 @@ import `in`.paanagam.business.data.PaanagamDatabase
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.util.UUID
 
 @Composable
 fun MenuManagementScreen(db: PaanagamDatabase) {
@@ -41,7 +42,26 @@ fun MenuManagementScreen(db: PaanagamDatabase) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Menu management", style = MaterialTheme.typography.titleLarge)
         Text("Edit existing menu items, prices, categories and coffee loyalty eligibility. Deactivated items remain in past bills.")
-        if (items.isEmpty()) Text("No menu items yet. Add the first item in POS.")
+        if (items.isEmpty()) {
+            Text("No menu items yet. Create your first item below or load sample items from POS.")
+            OutlinedTextField(name, { name = it }, label = { Text("First item name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(category, { category = it }, label = { Text("Category") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(price, { price = it }, label = { Text("Selling price (₹)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Checkbox(isCoffee, { isCoffee = it })
+                Text("Counts towards buy 10 coffees, get 1 free")
+            }
+            Button(modifier = Modifier.fillMaxWidth(), onClick = {
+                val paise = runCatching { BigDecimal(price).movePointRight(2).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
+                if (name.isBlank() || category.isBlank() || paise == null || paise <= 0L) {
+                    message = "Enter a name, category and valid price (up to 2 decimal places)."
+                } else scope.launch {
+                    runCatching { db.dao().saveCatalogItem(CatalogItem(UUID.randomUUID().toString(), name.trim(), category.trim(), paise, isCoffee = isCoffee, active = true)) }
+                        .onSuccess { name = ""; category = ""; price = ""; isCoffee = false; message = "First menu item created." }
+                        .onFailure { message = it.message ?: "Could not create menu item." }
+                }
+            }) { Text("Create first menu item") }
+        }
         LazyColumn(Modifier.heightIn(max = 220.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             items(items, key = { it.id }) { item ->
                 ListItem(
