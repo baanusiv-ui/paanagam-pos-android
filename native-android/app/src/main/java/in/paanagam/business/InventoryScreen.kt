@@ -3,6 +3,8 @@ package `in`.paanagam.business
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,7 +61,7 @@ fun InventoryScreen(db: PaanagamDatabase, mode: String) {
         if (selectedId.isBlank() && ingredients.isNotEmpty()) selectedId = ingredients.first().id
     }
 
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(if (mode == "Purchases") "Receive purchase into Store" else if (mode == "Store → Kitchen") "Transfer stock: Store ↔ Kitchen" else "Ingredient & stock control", color = InvGold, style = MaterialTheme.typography.titleLarge)
         if (mode == "Inventory" || mode == "Purchases" || ingredients.isEmpty()) {
             Card(colors = CardDefaults.cardColors(containerColor = InvPanel)) {
