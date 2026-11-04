@@ -69,6 +69,8 @@ fun ReportsScreen(db: PaanagamDatabase, title: String) {
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(sales.take(50), key = { it.id }) { sale ->
                 val cogs = costBySale[sale.id] ?: 0L
+                val saleRefundTotal = refunds.filter { it.saleId == sale.id }.sumOf { it.amountPaise }
+                val netSalePaise = sale.totalPaise - saleRefundTotal
                 Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
                     Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column(Modifier.weight(1f)) {
@@ -76,11 +78,12 @@ fun ReportsScreen(db: PaanagamDatabase, title: String) {
                             Text("${sale.paymentMethod} • ${sale.status}", color = Color(0xFF718078), style = MaterialTheme.typography.labelSmall)
                             Text("Cash ${rupees(sale.cashPaidPaise)} • UPI ${rupees(sale.upiPaidPaise)}", color = Color(0xFF718078), style = MaterialTheme.typography.labelSmall)
                             Text("Ingredient cost ${rupees(cogs)}", color = Color(0xFF718078), style = MaterialTheme.typography.labelSmall)
+                            if (saleRefundTotal > 0L) Text("Net after refunds ${rupees(netSalePaise)}", color = Color(0xFFC26A27), style = MaterialTheme.typography.labelSmall)
                             refunds.filter { it.saleId == sale.id }.forEach { refund -> Text("Refunded ${rupees(refund.amountPaise)} • ${fmt.format(Date(refund.refundedAt))}", color = Color(0xFFC26A27), style = MaterialTheme.typography.labelSmall) }
                         }
                         Column {
-                            Text(rupees(sale.totalPaise), color = ReportInk, fontWeight = FontWeight.Bold)
-                            Text("Margin ${rupees(sale.totalPaise - cogs)}", color = ReportGold, style = MaterialTheme.typography.labelSmall)
+                            Text("Net ${rupees(netSalePaise)}", color = ReportInk, fontWeight = FontWeight.Bold)
+                            Text("Margin ${rupees(netSalePaise - cogs)}", color = ReportGold, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
