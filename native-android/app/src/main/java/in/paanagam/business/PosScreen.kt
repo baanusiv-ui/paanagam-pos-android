@@ -401,7 +401,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                     saving = saving,
                     canCheckout = canCheckout,
                     message = message,
-                    salesCount = sales.size,
+                    salesCount = salesCount,
                     onDecrease = { id, item, qty ->
                         saving = true
                         recordPreCheckoutAudit("CART_ITEM_VOID", "Reduced ${item.name} quantity by 1 before checkout", item.pricePaise) {
