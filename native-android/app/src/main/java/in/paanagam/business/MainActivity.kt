@@ -468,7 +468,7 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, databaseKey: By
                     }
                     else -> {
                     when (selected) {
-                        "Dashboard" -> DashboardScreen(db, onNavigate = { selected = it })
+                        "Dashboard" -> DashboardScreen(db, adminView = activeStaff!!.role == "ADMIN", onNavigate = { selected = it })
                         "Sales History" -> SalesHistoryScreen(db, activeStaff!!)
                         "CCTV & Audit" -> AdminReauthGate(activeStaff!!, "CCTV & Audit") { CctvScreen(db, activeStaff!!) }
                         "POS" -> PosScreen(db, activeStaff!!)
@@ -789,7 +789,7 @@ private fun MoreModulesScreen(items: List<String>, onSelect: (String) -> Unit) {
 }
 
 @Composable
-private fun DashboardScreen(db: PaanagamDatabase, onNavigate: (String) -> Unit) {
+private fun DashboardScreen(db: PaanagamDatabase, adminView: Boolean, onNavigate: (String) -> Unit) {
     val sales by db.dao().sales().collectAsState(initial = emptyList())
     val saleCosts by db.dao().saleCosts().collectAsState(initial = emptyList())
     val wastage by db.dao().wastageRecords().collectAsState(initial = emptyList())
@@ -821,6 +821,7 @@ private fun DashboardScreen(db: PaanagamDatabase, onNavigate: (String) -> Unit) 
     }.take(4)
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
+        if (adminView) {
         item {
             Card(colors = CardDefaults.cardColors(containerColor = Espresso), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -913,6 +914,21 @@ private fun DashboardScreen(db: PaanagamDatabase, onNavigate: (String) -> Unit) 
                             Text("₹%.2f".format(sale.totalPaise / 100.0), color = Gold, fontWeight = FontWeight.Bold)
                         }
                         HorizontalDivider(color = Color(0xFFEFE6D8))
+                    }
+                }
+            }
+        }
+        } else {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = Espresso), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Cashier workspace", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text("Use POS to create orders. Sales history, stock balances and financial reports are restricted to Admin.", color = Color(0xFFE8D9C4), style = MaterialTheme.typography.bodyMedium)
+                        Button(onClick = { onNavigate("POS") }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE97832), contentColor = Color.White)) {
+                            Icon(Icons.Default.PointOfSale, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Open POS")
+                        }
                     }
                 }
             }
