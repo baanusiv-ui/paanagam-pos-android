@@ -472,7 +472,33 @@ private fun PosMenuPanel(
     onNewIsCoffee: (Boolean) -> Unit,
     onSaveNew: () -> Unit
 ) {
+    var orderMode by remember { mutableStateOf("DINE_IN") }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.weight(1f).background(Color(0xFFF1E8D7), RoundedCornerShape(24.dp)).padding(3.dp)) {
+                listOf("DINE_IN" to "Dine In", "TAKEAWAY" to "Takeaway").forEach { (mode, label) ->
+                    val selected = orderMode == mode
+                    TextButton(
+                        onClick = { orderMode = mode },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
+                        colors = ButtonDefaults.textButtonColors(
+                            containerColor = if (selected) Color(0xFF18B98A) else Color.Transparent,
+                            contentColor = if (selected) Color.White else PosBrown
+                        )
+                    ) { Text(label, maxLines = 1, fontWeight = FontWeight.SemiBold) }
+                }
+            }
+            OutlinedTextField(
+                value = search,
+                onValueChange = onSearch,
+                modifier = Modifier.weight(1.25f),
+                singleLine = true,
+                enabled = !saving,
+                placeholder = { Text("Search product name or code") },
+                shape = RoundedCornerShape(12.dp)
+            )
+        }
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             if (maxWidth < 560.dp) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -518,15 +544,6 @@ private fun PosMenuPanel(
                 }
             }
         }
-        OutlinedTextField(
-            value = search,
-            onValueChange = onSearch,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            enabled = !saving,
-            placeholder = { Text("Search product name or code") },
-            shape = RoundedCornerShape(12.dp)
-        )
         BoxWithConstraints(Modifier.weight(1f)) {
             val columns = when { maxWidth >= 900.dp -> 3; maxWidth >= 560.dp -> 3; else -> 2 }
             if (maxWidth >= 560.dp) {
