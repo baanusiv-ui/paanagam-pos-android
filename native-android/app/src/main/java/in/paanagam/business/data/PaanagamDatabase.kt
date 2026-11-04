@@ -325,6 +325,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
             if (existing != null) insertLoyaltyLedgerEntry(LoyaltyLedgerEntry(UUID.randomUUID().toString(), phone, "", "OPENING_BALANCE", existing.coffeeProgress, existing.freeCoffeesAvailable, existing.lifetimeCoffeeCount, minOf(existing.updatedAt, at)))
             return
         }
+        var reconstructedEntries = 0
         historicalSales.forEach { historicalSale ->
             val saleLinesForHistory = saleLines(historicalSale.id)
             val paid = saleLinesForHistory.filter { catalogItem(it.itemId)?.isCoffee == true && it.unitPricePaise > 0L }.sumOf { it.quantity }
@@ -333,6 +334,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
             if (paid > 0) originals += LoyaltyLedgerEntry(UUID.randomUUID().toString(), phone, historicalSale.id, "EARN", paid, 0, paid, historicalSale.createdAt)
             if (redeemed > 0) originals += LoyaltyLedgerEntry(UUID.randomUUID().toString(), phone, historicalSale.id, "REDEEM", 0, -redeemed, 0, historicalSale.createdAt)
             originals.forEach { insertLoyaltyLedgerEntry(it) }
+            reconstructedEntries += originals.size
             if (historicalSale.status == "REFUNDED") {
                 val refundAt = refundHistoryForSale(historicalSale.id).firstOrNull()?.refundedAt ?: historicalSale.createdAt
                 originals.forEach { entry ->
@@ -340,21 +342,23 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
                 }
             }
         }
+        if (reconstructedEntries == 0) {
+            val existing = loyaltyAccount(phone)
+            if (existing != null) insertLoyaltyLedgerEntry(LoyaltyLedgerEntry(UUID.randomUUID().toString(), phone, "", "OPENING_BALANCE", existing.coffeeProgress, existing.freeCoffeesAvailable, existing.lifetimeCoffeeCount, minOf(existing.updatedAt, at)))
+        }
         rebuildLoyaltyAccount(phone, at)
     }
 
     private suspend fun rebuildLoyaltyAccount(phone: String, at: Long) {
         val entries = loyaltyLedgerEntries(phone)
-        val coffeeTotal = entries.fold(0L) { total, entry -> Math.addExact(total, entry.coffeeDelta.toLong()) }
-        val rewardAdjustments = entries.fold(0L) { total, entry -> Math.addExact(total, entry.rewardDelta.toLong()) }
-        val lifetime = entries.fold(0L) { total, entry -> Math.addExact(total, entry.lifetimeDelta.toLong()) }
         val previous = loyaltyAccount(phone)
+        val balance = LoyaltyLedgerRules.calculate(entries)
         saveLoyaltyAccount(LoyaltyAccount(
             phone = phone,
             customerName = previous?.customerName ?: phone,
-            coffeeProgress = Math.floorMod(coffeeTotal, 10L).toInt(),
-            freeCoffeesAvailable = Math.toIntExact(Math.addExact(Math.floorDiv(coffeeTotal, 10L), rewardAdjustments)),
-            lifetimeCoffeeCount = Math.toIntExact(lifetime.coerceAtLeast(0L)),
+            coffeeProgress = balance.coffeeProgress,
+            freeCoffeesAvailable = balance.freeCoffeesAvailable,
+            lifetimeCoffeeCount = balance.lifetimeCoffeeCount,
             updatedAt = at
         ))
     }
