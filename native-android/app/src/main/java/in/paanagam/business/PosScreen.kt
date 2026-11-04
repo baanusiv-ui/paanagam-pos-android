@@ -144,6 +144,7 @@ fun PosScreen(db: PaanagamDatabase) {
                     search = search,
                     onSearch = { search = it },
                     items = visibleItems,
+                    selectedQuantities = cart.mapValues { it.value.second },
                     onAdd = { item -> cart = cart + (item.id to (item to ((cart[item.id]?.second ?: 0) + 1))) },
                     showAddItem = showAddItem,
                     onToggleAdd = { showAddItem = !showAddItem },
@@ -230,6 +231,7 @@ fun PosScreen(db: PaanagamDatabase) {
                     search = search,
                     onSearch = { search = it },
                     items = visibleItems,
+                    selectedQuantities = cart.mapValues { it.value.second },
                     onAdd = { item -> cart = cart + (item.id to (item to ((cart[item.id]?.second ?: 0) + 1))) },
                     showAddItem = showAddItem,
                     onToggleAdd = { showAddItem = !showAddItem },
@@ -240,11 +242,11 @@ fun PosScreen(db: PaanagamDatabase) {
                     newPrice = newPrice, onNewPrice = { newPrice = it },
                     newIsCoffee = newIsCoffee, onNewIsCoffee = { newIsCoffee = it },
                     onSaveNew = {
-                        val price = newPrice.toDoubleOrNull()
-                        if (newName.isBlank() || price == null || price <= 0) message = "Enter a menu item and a valid price."
+                        val pricePaise = runCatching { BigDecimal(newPrice).movePointRight(2).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
+                        if (newName.isBlank() || pricePaise == null || pricePaise <= 0) message = "Enter a menu item and a valid price with up to 2 decimals."
                         else scope.launch {
-                            db.dao().saveCatalogItem(CatalogItem(UUID.randomUUID().toString(), newName.trim(), newCategory.trim(), (price * 100).toLong()))
-                            newName = ""; newPrice = ""; showAddItem = false; message = "Menu item added."
+                            db.dao().saveCatalogItem(CatalogItem(UUID.randomUUID().toString(), newName.trim(), newCategory.trim(), pricePaise, isCoffee = newIsCoffee))
+                            newName = ""; newPrice = ""; newIsCoffee = false; showAddItem = false; message = "Menu item added."
                         }
                     }
                 )
@@ -317,6 +319,7 @@ private fun PosMenuPanel(
     search: String,
     onSearch: (String) -> Unit,
     items: List<CatalogItem>,
+    selectedQuantities: Map<String, Int>,
     onAdd: (CatalogItem) -> Unit,
     showAddItem: Boolean,
     onToggleAdd: () -> Unit,
@@ -400,6 +403,18 @@ private fun PosMenuPanel(
                             Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                 Box(Modifier.fillMaxWidth().height(54.dp).background(Color(0xFFF7F0E4), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
                                     Text(menuEmoji(item.name), style = MaterialTheme.typography.headlineMedium)
+                                    val selectedQty = selectedQuantities[item.id] ?: 0
+                                    if (selectedQty > 0) {
+                                        Text(
+                                            "×$selectedQty",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            modifier = Modifier.align(Alignment.TopEnd)
+                                                .background(PosOrange, RoundedCornerShape(20.dp))
+                                                .padding(horizontal = 9.dp, vertical = 4.dp)
+                                        )
+                                    }
                                 }
                                 Text(item.name, color = PosWalnut, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 2, minLines = 2)
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
