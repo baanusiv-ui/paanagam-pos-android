@@ -282,23 +282,34 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
             // Build one menu-unit recipe, then consume it unit-by-unit. This preserves
             // exact FIFO lot attribution for every sale unit, enabling safe quantity refunds.
             val perUnitRequirements = mutableMapOf<String, Long>()
-            val components = comboComponents(line.itemId)
-            if (components.isNotEmpty()) {
-                components.forEach { component ->
-                    val componentRecipe = recipeLines(component.componentItemId)
-                    require(componentRecipe.isNotEmpty()) { "Recipe missing for combo component ${component.componentName}." }
-                    componentRecipe.forEach { recipe ->
-                        val qty = Math.multiplyExact(recipe.quantityBaseUnits, component.quantity.toLong())
-                        perUnitRequirements[recipe.ingredientId] = Math.addExact(perUnitRequirements[recipe.ingredientId] ?: 0L, qty)
+            suspend fun expandMenuRequirements(menuItemId: String, multiplier: Long, path: Set<String>) {
+                require(menuItemId !in path) { "Circular combo detected. Correct the combo components before checkout." }
+                require(multiplier > 0L) { "Combo component quantity must be positive." }
+                val nextPath = path + menuItemId
+                val components = comboComponents(menuItemId)
+                if (components.isNotEmpty()) {
+                    components.forEach { component ->
+                        require(component.quantity > 0) { "Combo component quantity is invalid." }
+                        require(catalogItem(component.componentItemId) != null) { "Combo component ${component.componentName} is unavailable." }
+                        expandMenuRequirements(
+                            component.componentItemId,
+                            Math.multiplyExact(multiplier, component.quantity.toLong()),
+                            nextPath
+                        )
+                    }
+                } else {
+                    val configuredRecipe = recipeLines(menuItemId)
+                    require(configuredRecipe.isNotEmpty()) {
+                        "Recipe missing for ${catalogItem(menuItemId)?.name ?: menuItemId}. Configure its ingredients before selling."
+                    }
+                    configuredRecipe.forEach { recipe ->
+                        require(recipe.quantityBaseUnits > 0L) { "Recipe quantity must be positive." }
+                        val required = Math.multiplyExact(recipe.quantityBaseUnits, multiplier)
+                        perUnitRequirements[recipe.ingredientId] = Math.addExact(perUnitRequirements[recipe.ingredientId] ?: 0L, required)
                     }
                 }
-            } else {
-                val configuredRecipe = recipeLines(line.itemId)
-                require(configuredRecipe.isNotEmpty()) { "Recipe missing for ${line.itemName}. Configure its ingredients before selling." }
-                configuredRecipe.forEach { recipe ->
-                    perUnitRequirements[recipe.ingredientId] = Math.addExact(perUnitRequirements[recipe.ingredientId] ?: 0L, recipe.quantityBaseUnits)
-                }
             }
+            expandMenuRequirements(line.itemId, 1L, emptySet())
             perUnitRequirements.forEach { (ingredientId, _) ->
                 val ingredient = ingredient(ingredientId) ?: error("Recipe ingredient not found.")
                 require(!ingredient.isCoffeePowder) {
