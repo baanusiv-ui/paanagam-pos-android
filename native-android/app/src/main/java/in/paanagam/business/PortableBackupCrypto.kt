@@ -6,7 +6,6 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.security.SecureRandom
 import javax.crypto.Cipher
-import javax.crypto.CipherInputStream
 import javax.crypto.CipherOutputStream
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
@@ -59,7 +58,19 @@ internal object PortableBackupCrypto {
         val key = deriveKey(passphrase, salt, iterations)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, nonce))
-        CipherInputStream(input, cipher).use { decrypted -> decrypted.copyTo(output) }
+        // Explicitly call doFinal() so an invalid or truncated GCM payload fails
+        // authentication before restore validation or database replacement.
+        val buffer = ByteArray(64 * 1024)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            if (count == 0) continue
+            val plaintext = cipher.update(buffer, 0, count)
+            if (plaintext != null && plaintext.isNotEmpty()) output.write(plaintext)
+        }
+        val authenticatedTail = cipher.doFinal()
+        if (authenticatedTail.isNotEmpty()) output.write(authenticatedTail)
+        output.flush()
     }
 
     private fun deriveKey(passphrase: CharArray, salt: ByteArray, iterations: Int): SecretKeySpec {
