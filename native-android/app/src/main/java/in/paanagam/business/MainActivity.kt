@@ -307,6 +307,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
             ?: error("Android device identifier is unavailable.")
+        // Recover a pre-restore database before SQLCipher/Room can create a new
+        // empty live file. This covers process death between the two restore renames.
+        val startupLiveFile = getDatabasePath("paanagam-local.db")
+        val startupRestoreRecovery = getDatabasePath("paanagam-before-restore.db")
+        if (!startupLiveFile.exists() && startupRestoreRecovery.exists()) {
+            check(startupRestoreRecovery.renameTo(startupLiveFile)) {
+                "An interrupted restore was detected, but the previous database could not be recovered. The recovery file has been preserved."
+            }
+        }
         val databaseKey = PaanagamDatabaseSecurity.prepare(applicationContext)
         val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db")
             .openHelperFactory(PaanagamDatabaseSecurity.roomOpenHelperFactory(databaseKey))
