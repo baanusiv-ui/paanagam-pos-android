@@ -33,7 +33,7 @@ data class ProductionBatch(@PrimaryKey val id: String, val productName: String, 
 data class ProductionInput(@PrimaryKey val id: String, val batchId: String, val ingredientId: String, val quantityBaseUnits: Long, val costPaise: Long)
 
 @Entity(tableName = "wastage_records", indices = [Index(value = ["sourceId"]), Index(value = ["sourceLineId"])])
-data class WastageRecord(@PrimaryKey val id: String, val ingredientId: String, val location: String, val quantityBaseUnits: Long, val reason: String, val recordedAt: Long, val costPaise: Long, @ColumnInfo(defaultValue = "MANUAL") val sourceType: String = "MANUAL", val sourceId: String? = null, val sourceLineId: String? = null, @ColumnInfo(defaultValue = "1") val stockAdjusted: Boolean = true)
+data class WastageRecord(@PrimaryKey val id: String, val ingredientId: String, val location: String, val quantityBaseUnits: Long, val reason: String, val recordedAt: Long, val costPaise: Long, @ColumnInfo(defaultValue = "'MANUAL'") val sourceType: String = "MANUAL", val sourceId: String? = null, val sourceLineId: String? = null, @ColumnInfo(defaultValue = "1") val stockAdjusted: Boolean = true)
 
 @Entity(tableName = "sales")
 data class Sale(@PrimaryKey val id: String, val createdAt: Long, val totalPaise: Long, val paymentMethod: String, val status: String = "COMPLETED", val syncState: String = "LOCAL", val customerPhone: String = "", val shiftId: String? = null, @ColumnInfo(defaultValue = "0") val cashPaidPaise: Long = 0L, @ColumnInfo(defaultValue = "0") val upiPaidPaise: Long = 0L)
