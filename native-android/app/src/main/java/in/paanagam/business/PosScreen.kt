@@ -242,7 +242,8 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                     search = search,
                     onSearch = { search = it },
                     items = visibleItems,
-                    onAdd = { item -> cart = cart + (item.id to (item to ((cart[item.id]?.second ?: 0) + 1))) },
+                    cartQuantities = cart.mapValues { it.value.second },
+                    onAdd = { item -> cart = cart + (item.id to (item to ((cart[item.id]?.second ?: 0) + 1))); message = item.name + " added to bill." },
                     showAddItem = showAddItem,
                     onToggleAdd = { showAddItem = !showAddItem },
                     canSeedDemoMenu = canSeedDemoMenu,
@@ -452,6 +453,7 @@ private fun PosMenuPanel(
     search: String,
     onSearch: (String) -> Unit,
     items: List<CatalogItem>,
+    cartQuantities: Map<String, Int>,
     onAdd: (CatalogItem) -> Unit,
     showAddItem: Boolean,
     onToggleAdd: () -> Unit,
@@ -568,7 +570,8 @@ private fun PosMenuPanel(
                                             Text(item.name, color = PosWalnut, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 2, minLines = 2)
                                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                                 Text("₹${"%.2f".format(item.pricePaise / 100.0)}", color = PosBrown, fontWeight = FontWeight.Bold)
-                                                Text("+ Add", color = PosOrange, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                                val inBill = cartQuantities[item.id] ?: 0
+                                                Text(if (inBill > 0) "✓ ×$inBill" else "+ Add", color = if (inBill > 0) Color(0xFF16845B) else PosOrange, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                                             }
                                         }
                                     }
@@ -618,7 +621,8 @@ private fun PosMenuPanel(
                                         Text(item.name, color = PosWalnut, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 2, minLines = 2)
                                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                             Text("₹${"%.2f".format(item.pricePaise / 100.0)}", color = PosBrown, fontWeight = FontWeight.Bold)
-                                            Text("+ Add", color = PosOrange, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                            val inBill = cartQuantities[item.id] ?: 0
+                                            Text(if (inBill > 0) "✓ ×$inBill" else "+ Add", color = if (inBill > 0) Color(0xFF16845B) else PosOrange, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }
