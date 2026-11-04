@@ -81,8 +81,7 @@ fun ComboPlanningScreen(db: PaanagamDatabase) {
         Button(onClick = {
             val price = runCatching { BigDecimal(comboPrice).takeIf { it.signum() > 0 }?.setScale(2, RoundingMode.HALF_UP)?.movePointRight(2)?.longValueExact() }.getOrNull()
             if (comboName.isBlank() || price == null || price <= 0 || draft.isEmpty()) message = "Enter combo name, valid price and at least one component."
-            else {
-                else scope.launch {
+            else scope.launch {
                     val id = UUID.randomUUID().toString()
                     val validation = runCatching {
                         val visiting = mutableSetOf<String>()
@@ -122,7 +121,6 @@ fun ComboPlanningScreen(db: PaanagamDatabase) {
                         }.onFailure { message = it.message ?: "Combo could not be saved." }
                     }
                 }
-            }
         }, modifier = Modifier.fillMaxWidth()) { Text("Save combo") }
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.primary)
         Divider()
