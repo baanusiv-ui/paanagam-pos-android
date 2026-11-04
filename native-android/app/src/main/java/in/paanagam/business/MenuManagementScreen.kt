@@ -49,20 +49,23 @@ fun MenuManagementScreen(db: PaanagamDatabase) {
             OutlinedTextField(name, { name = it }, label = { Text("First item name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(category, { category = it }, label = { Text("Category") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(price, { price = it }, label = { Text("Selling price (₹)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-            Button(modifier = Modifier.fillMaxWidth(), onClick = {
-                val paise = runCatching { BigDecimal(price).movePointRight(2).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
-                if (name.isBlank() || category.isBlank() || paise == null || paise <= 0L) {
-                    message = "Enter a name, category and valid price (up to 2 decimal places)."
-                } else scope.launch {
-                    runCatching { db.dao().saveCatalogItem(CatalogItem(UUID.randomUUID().toString(), name.trim(), category.trim(), paise, isCoffee = isCoffee, active = true)) }
-                        .onSuccess { name = ""; category = ""; price = ""; isCoffee = false; message = "First menu item created." }
-                        .onFailure { message = it.message ?: "Could not create menu item." }
-                }
-            }) { Text("Save menu item") }
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 Checkbox(isCoffee, { isCoffee = it })
                 Text("Counts towards buy 10 coffees, get 1 free")
             }
+            Button(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
+                onClick = {
+                    val paise = runCatching { BigDecimal(price).movePointRight(2).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
+                    if (name.isBlank() || category.isBlank() || paise == null || paise <= 0L) {
+                        message = "Enter a name, category and valid price (up to 2 decimal places)."
+                    } else scope.launch {
+                        runCatching { db.dao().saveCatalogItem(CatalogItem(UUID.randomUUID().toString(), name.trim(), category.trim(), paise, isCoffee = isCoffee, active = true)) }
+                            .onSuccess { name = ""; category = ""; price = ""; isCoffee = false; message = "First menu item created."; selectedId = "" }
+                            .onFailure { message = it.message ?: "Could not create menu item." }
+                    }
+                }
+            ) { Text("SAVE MENU ITEM") }
 
         }
         if (items.isNotEmpty()) {
