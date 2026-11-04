@@ -156,7 +156,7 @@ data class SaleLineRefund(
     val saleId: String,
     val saleLineId: String,
     val refundedQuantity: Int,
-    val saleUnitIndex: Int,
+    @ColumnInfo(defaultValue = "-1") val saleUnitIndex: Int,
     val amountPaise: Long,
     val cashRefundPaise: Long,
     val upiRefundPaise: Long,
