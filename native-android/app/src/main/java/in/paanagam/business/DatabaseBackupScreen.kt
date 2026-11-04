@@ -52,9 +52,16 @@ private object PaanagamDatabaseBackup {
             PaanagamDatabaseSecurity.exportPlaintextForBackup(context, databaseKey, portable)
             val output = context.contentResolver.openOutputStream(destination, "wt")
                 ?: error("Could not open the selected backup destination.")
-            portable.inputStream().use { input -> output.use { PortableBackupCrypto.encrypt(input, it, passphrase) } }
+            output.use { destinationStream ->
+                portable.inputStream().use { input ->
+                    PortableBackupCrypto.encrypt(input, destinationStream, passphrase)
+                }
+            }
         } finally {
-            portable.delete()
+            // A plaintext export must never be silently left behind in the cache.
+            if (portable.exists()) check(portable.delete()) {
+                "Could not securely clean up the temporary plaintext backup."
+            }
             passphrase.fill('\u0000')
         }
     }
