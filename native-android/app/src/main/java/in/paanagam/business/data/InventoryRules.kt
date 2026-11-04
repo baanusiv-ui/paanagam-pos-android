@@ -11,6 +11,15 @@ internal fun calculateFifoCostPaise(lotTakes: List<Pair<Long, Long>>): Long {
     return numerator.divide(BigInteger.valueOf(1000L)).longValueExact()
 }
 
+/** Allocate the exact sale-line/ingredient FIFO cost to one unit without losing paise to repeated rounding. */
+internal fun calculateFifoUnitCostPaise(unitIndex: Int, unitLotTakes: List<Triple<Int, Long, Long>>): Long {
+    require(unitIndex >= 0)
+    require(unitLotTakes.all { it.first >= 0 && it.second >= 0L && it.third >= 0L })
+    val prior = calculateFifoCostPaise(unitLotTakes.filter { it.first < unitIndex }.map { it.second to it.third })
+    val cumulative = calculateFifoCostPaise(unitLotTakes.filter { it.first <= unitIndex }.map { it.second to it.third })
+    return Math.subtractExact(cumulative, prior)
+}
+
 internal fun isCoffeePowderReductionAllowed(isCoffeePowder: Boolean, baseUnit: String, varianceBaseUnits: Long): Boolean {
     return !isCoffeePowder || varianceBaseUnits >= 0L ||
         (baseUnit == "g" && varianceBaseUnits % 250000L == 0L)
