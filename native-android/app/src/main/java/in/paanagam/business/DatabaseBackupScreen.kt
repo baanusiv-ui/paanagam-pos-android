@@ -78,10 +78,17 @@ private object PaanagamDatabaseBackup {
             db.close()
             File(liveFile.path + "-wal").delete()
             File(liveFile.path + "-shm").delete()
-            if (previous.exists()) require(previous.delete()) { "Could not clear the previous recovery file." }
+            // Never delete the only recovery copy. If the live DB is absent after
+            // an interrupted earlier restore, stop and let startup recovery restore it.
+            if (!liveFile.exists() && previous.exists()) {
+                error("A previous restore recovery file is waiting to be recovered. Reopen Paanagam before starting another restore.")
+            }
+            if (previous.exists()) require(previous.delete()) { "Could not clear the stale recovery file while the live database is present." }
             require(!liveFile.exists() || liveFile.renameTo(previous)) { "Could not preserve the current database before restore." }
             if (!stagedEncrypted.renameTo(liveFile)) {
-                if (previous.exists()) previous.renameTo(liveFile)
+                if (previous.exists()) {
+                    check(previous.renameTo(liveFile)) { "Restore failed and the previous database could not be put back. Recovery file remains at ${previous.name}." }
+                }
                 error("Could not install the restored database. The original database was preserved.")
             }
         } catch (error: Throwable) {
