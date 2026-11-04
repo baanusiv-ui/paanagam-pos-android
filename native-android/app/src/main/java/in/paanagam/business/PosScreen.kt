@@ -490,30 +490,54 @@ private fun PosMenuPanel(
     onSaveNew: () -> Unit
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(Modifier.weight(1f).background(Color(0xFFF1E8D7), RoundedCornerShape(24.dp)).padding(3.dp)) {
-                listOf("DINE_IN" to "Dine In", "TAKEAWAY" to "Takeaway").forEach { (mode, label) ->
-                    val selected = orderMode == mode
-                    TextButton(
-                        onClick = { onOrderMode(mode) },
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
-                        colors = ButtonDefaults.textButtonColors(
-                            containerColor = if (selected) Color(0xFF18B98A) else Color.Transparent,
-                            contentColor = if (selected) Color.White else PosBrown
-                        )
-                    ) { Text(label, maxLines = 1, fontWeight = FontWeight.SemiBold) }
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            if (maxWidth < 560.dp) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(Modifier.fillMaxWidth().background(Color(0xFFF1E8D7), RoundedCornerShape(24.dp)).padding(3.dp)) {
+                        listOf("DINE_IN" to "Dine In", "TAKEAWAY" to "Takeaway").forEach { (mode, label) ->
+                            val selected = orderMode == mode
+                            TextButton(
+                                onClick = { onOrderMode(mode) },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 3.dp),
+                                colors = ButtonDefaults.textButtonColors(
+                                    containerColor = if (selected) Color(0xFF18B98A) else Color.Transparent,
+                                    contentColor = if (selected) Color.White else PosBrown
+                                )
+                            ) { Text(label, maxLines = 1, fontWeight = FontWeight.SemiBold) }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = search, onValueChange = onSearch,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp, max = 58.dp),
+                        singleLine = true, enabled = !saving,
+                        placeholder = { Text("Search product name or code", maxLines = 1) },
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            } else {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.weight(1f).background(Color(0xFFF1E8D7), RoundedCornerShape(24.dp)).padding(3.dp)) {
+                        listOf("DINE_IN" to "Dine In", "TAKEAWAY" to "Takeaway").forEach { (mode, label) ->
+                            val selected = orderMode == mode
+                            TextButton(
+                                onClick = { onOrderMode(mode) }, modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
+                                colors = ButtonDefaults.textButtonColors(
+                                    containerColor = if (selected) Color(0xFF18B98A) else Color.Transparent,
+                                    contentColor = if (selected) Color.White else PosBrown
+                                )
+                            ) { Text(label, maxLines = 1, fontWeight = FontWeight.SemiBold) }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = search, onValueChange = onSearch, modifier = Modifier.weight(1.25f),
+                        singleLine = true, enabled = !saving,
+                        placeholder = { Text("Search product name or code", maxLines = 1) },
+                        shape = RoundedCornerShape(12.dp)
+                    )
                 }
             }
-            OutlinedTextField(
-                value = search,
-                onValueChange = onSearch,
-                modifier = Modifier.weight(1.25f),
-                singleLine = true,
-                enabled = !saving,
-                placeholder = { Text("Search product name or code") },
-                shape = RoundedCornerShape(12.dp)
-            )
         }
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             if (maxWidth < 560.dp) {
