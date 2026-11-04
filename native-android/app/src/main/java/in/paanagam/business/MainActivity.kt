@@ -412,7 +412,19 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, databaseKey: By
                                     }, contentDescription = tab
                                 )
                             },
-                            label = { Text(if (tab == "Sales History") "Sales" else tab) },
+                            label = {
+                                Text(
+                                    when (tab) {
+                                        "Dashboard" -> "Home"
+                                        "Inventory" -> "Stock"
+                                        "Sales History" -> "Sales"
+                                        else -> tab
+                                    },
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = Gold, selectedTextColor = Gold,
                                 indicatorColor = Mint, unselectedIconColor = Color(0xFF829088),
