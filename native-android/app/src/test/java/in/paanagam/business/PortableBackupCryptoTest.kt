@@ -34,6 +34,24 @@ class PortableBackupCryptoTest {
         }
     }
 
+
+    @Test fun truncatedCiphertextIsRejected() {
+        val encrypted = ByteArrayOutputStream()
+        PortableBackupCrypto.encrypt(
+            ByteArrayInputStream(ByteArray(4096) { (it % 239).toByte() }),
+            encrypted,
+            "correct horse battery".toCharArray()
+        )
+        val truncated = encrypted.toByteArray().copyOf(encrypted.size() - 8)
+        assertThrows(Exception::class.java) {
+            PortableBackupCrypto.decrypt(
+                ByteArrayInputStream(truncated),
+                ByteArrayOutputStream(),
+                "correct horse battery".toCharArray()
+            )
+        }
+    }
+
     @Test fun rejectsShortPassphrases() {
         assertThrows(IllegalArgumentException::class.java) {
             PortableBackupCrypto.encrypt(ByteArrayInputStream(byteArrayOf(1)), ByteArrayOutputStream(), "short".toCharArray())
