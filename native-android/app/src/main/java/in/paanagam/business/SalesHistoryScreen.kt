@@ -112,7 +112,7 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
                         }
                         OutlinedTextField(
                             partialRefundQuantity,
-                            { partialRefundQuantity = it.filter(Char::isDigit).take(4) },
+                            { partialRefundQuantity = it.filter { ch -> ch.isDigit() }.take(4) },
                             label = { Text("Quantity to refund (max $remainingForLine)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.fillMaxWidth(),
