@@ -421,7 +421,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                         scope.launch {
                             runCatching {
                                 db.dao().saveHeldOrder(
-                                    HeldOrder(heldId, System.currentTimeMillis(), customerPhone, total),
+                                    HeldOrder(heldId, System.currentTimeMillis(), customerPhone, total, orderMode),
                                     cartItems.map { (item, qty) -> HeldOrderLine(UUID.randomUUID().toString(), heldId, item.id, item.name, qty, item.pricePaise) }
                                 )
                             }.onSuccess {
