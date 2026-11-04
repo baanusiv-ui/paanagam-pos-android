@@ -512,15 +512,10 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
                 }
                 require(lots.map { it.location }.distinct().size == 1)
                 val ingredientLineMovements = allLineMovements.filter { it.ingredientId == ingredientId }
-                val priorUnitCost = calculateFifoCostPaise(
-                    ingredientLineMovements.filter { (it.saleUnitIndex ?: -1) < unitIndex }
-                        .map { it.quantityBaseUnits to it.unitCostPaise }
+                val exactUnitCost = calculateFifoUnitCostPaise(
+                    unitIndex,
+                    ingredientLineMovements.map { Triple(it.saleUnitIndex ?: -1, it.quantityBaseUnits, it.unitCostPaise) }
                 )
-                val cumulativeUnitCost = calculateFifoCostPaise(
-                    ingredientLineMovements.filter { (it.saleUnitIndex ?: -1) <= unitIndex }
-                        .map { it.quantityBaseUnits to it.unitCostPaise }
-                )
-                val exactUnitCost = Math.subtractExact(cumulativeUnitCost, priorUnitCost)
                 val quantity = ingredientMovements.fold(0L) { total, movement -> Math.addExact(total, movement.quantityBaseUnits) }
                 insertWastage(WastageRecord(
                     UUID.randomUUID().toString(), ingredientId, lots.first().location, quantity,
