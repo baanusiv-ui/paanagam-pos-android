@@ -176,6 +176,20 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
 
     @Query("SELECT * FROM loyalty_accounts ORDER BY customerName")
     fun loyaltyAccounts(): Flow<List<LoyaltyAccount>>
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertLoyaltyLedgerEntry(entry: LoyaltyLedgerEntry)
+    @Query("SELECT * FROM loyalty_ledger WHERE phone = :phone ORDER BY createdAt, id")
+    suspend fun loyaltyLedgerEntries(phone: String): List<LoyaltyLedgerEntry>
+    @Query("SELECT * FROM loyalty_ledger WHERE saleId = :saleId AND entryType != 'REVERSAL' ORDER BY createdAt, id")
+    suspend fun loyaltyLedgerEntriesForSale(saleId: String): List<LoyaltyLedgerEntry>
+    @Query("SELECT * FROM sales WHERE customerPhone = :phone ORDER BY createdAt, id")
+    suspend fun salesForCustomer(phone: String): List<Sale>
+    @Query("SELECT * FROM sale_refunds WHERE saleId = :saleId ORDER BY refundedAt")
+    suspend fun refundHistoryForSale(saleId: String): List<SaleRefund>
+    @Query("SELECT * FROM sale_refunds ORDER BY refundedAt DESC")
+    fun allSaleRefunds(): Flow<List<SaleRefund>>
+    @Query("SELECT reversesEntryId FROM loyalty_ledger WHERE reversesEntryId IS NOT NULL")
+    suspend fun reversedLoyaltyEntryIds(): List<String?>
     @Query("SELECT * FROM loyalty_accounts WHERE phone = :phone")
     suspend fun loyaltyAccount(phone: String): LoyaltyAccount?
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -255,8 +269,10 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         val saleWithShift = sale.copy(shiftId = if (cashPortion > 0) activeShift?.id else null, cashPaidPaise = cashPortion, upiPaidPaise = upiPortion)
         val rewardLines = lines.filter { catalogItem(it.itemId)?.isCoffee == true && it.unitPricePaise == 0L }
         require(rewardLines.size <= 1 && rewardLines.all { it.quantity == 1 }) { "Only one free coffee can be redeemed per bill." }
+        val validLoyaltyPhone = sale.customerPhone.matches(Regex("[0-9]{10}"))
+        if (validLoyaltyPhone) ensureLoyaltyLedgerSeeded(sale.customerPhone, sale.createdAt)
         val loyaltyBefore = if (rewardLines.isNotEmpty()) {
-            require(sale.customerPhone.matches(Regex("[0-9]{10}"))) { "Enter the customer's 10-digit mobile number to redeem." }
+            require(validLoyaltyPhone) { "Enter the customer's 10-digit mobile number to redeem." }
             loyaltyAccount(sale.customerPhone)?.also { require(it.freeCoffeesAvailable > 0) { "No free coffee reward is available." } }
                 ?: error("No loyalty account found for this mobile number.")
         } else null
@@ -295,26 +311,54 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         insertKitchenTicket(KitchenTicket(sale.id, "NEW", sale.createdAt, sale.createdAt))
         saveSaleCost(SaleCost(sale.id, totalIngredientCost))
         val paidCoffeeCount = lines.filter { catalogItem(it.itemId)?.isCoffee == true && it.unitPricePaise > 0L }.sumOf { it.quantity }
-        if (loyaltyBefore != null) {
-            saveLoyaltyAccount(loyaltyBefore.copy(
-                freeCoffeesAvailable = loyaltyBefore.freeCoffeesAvailable - 1,
-                updatedAt = sale.createdAt
-            ))
-        }
-        if (sale.customerPhone.matches(Regex("[0-9]{10}")) && paidCoffeeCount > 0) {
-            val previous = loyaltyAccount(sale.customerPhone)
-            val total = (previous?.coffeeProgress ?: 0) + paidCoffeeCount
-            val earned = total / 10
-            saveLoyaltyAccount(LoyaltyAccount(
-                phone = sale.customerPhone,
-                customerName = previous?.customerName ?: sale.customerPhone,
-                coffeeProgress = total % 10,
-                freeCoffeesAvailable = (previous?.freeCoffeesAvailable ?: 0) + earned,
-                lifetimeCoffeeCount = (previous?.lifetimeCoffeeCount ?: 0) + paidCoffeeCount,
-                updatedAt = sale.createdAt
-            ))
+        if (validLoyaltyPhone) {
+            if (loyaltyBefore != null) insertLoyaltyLedgerEntry(LoyaltyLedgerEntry(UUID.randomUUID().toString(), sale.customerPhone, sale.id, "REDEEM", 0, -1, 0, sale.createdAt))
+            if (paidCoffeeCount > 0) insertLoyaltyLedgerEntry(LoyaltyLedgerEntry(UUID.randomUUID().toString(), sale.customerPhone, sale.id, "EARN", paidCoffeeCount, 0, paidCoffeeCount, sale.createdAt))
+            rebuildLoyaltyAccount(sale.customerPhone, sale.createdAt)
         }
     }
+    private suspend fun ensureLoyaltyLedgerSeeded(phone: String, at: Long) {
+        if (loyaltyLedgerEntries(phone).isNotEmpty()) return
+        val historicalSales = salesForCustomer(phone)
+        if (historicalSales.isEmpty()) {
+            val existing = loyaltyAccount(phone)
+            if (existing != null) insertLoyaltyLedgerEntry(LoyaltyLedgerEntry(UUID.randomUUID().toString(), phone, "", "OPENING_BALANCE", existing.coffeeProgress, existing.freeCoffeesAvailable, existing.lifetimeCoffeeCount, minOf(existing.updatedAt, at)))
+            return
+        }
+        historicalSales.forEach { historicalSale ->
+            val saleLinesForHistory = saleLines(historicalSale.id)
+            val paid = saleLinesForHistory.filter { catalogItem(it.itemId)?.isCoffee == true && it.unitPricePaise > 0L }.sumOf { it.quantity }
+            val redeemed = saleLinesForHistory.filter { catalogItem(it.itemId)?.isCoffee == true && it.unitPricePaise == 0L }.sumOf { it.quantity }
+            val originals = mutableListOf<LoyaltyLedgerEntry>()
+            if (paid > 0) originals += LoyaltyLedgerEntry(UUID.randomUUID().toString(), phone, historicalSale.id, "EARN", paid, 0, paid, historicalSale.createdAt)
+            if (redeemed > 0) originals += LoyaltyLedgerEntry(UUID.randomUUID().toString(), phone, historicalSale.id, "REDEEM", 0, -redeemed, 0, historicalSale.createdAt)
+            originals.forEach { insertLoyaltyLedgerEntry(it) }
+            if (historicalSale.status == "REFUNDED") {
+                val refundAt = refundHistoryForSale(historicalSale.id).firstOrNull()?.refundedAt ?: historicalSale.createdAt
+                originals.forEach { entry ->
+                    insertLoyaltyLedgerEntry(LoyaltyLedgerEntry(UUID.randomUUID().toString(), phone, historicalSale.id, "REVERSAL", -entry.coffeeDelta, -entry.rewardDelta, -entry.lifetimeDelta, refundAt, entry.id))
+                }
+            }
+        }
+        rebuildLoyaltyAccount(phone, at)
+    }
+
+    private suspend fun rebuildLoyaltyAccount(phone: String, at: Long) {
+        val entries = loyaltyLedgerEntries(phone)
+        val coffeeTotal = entries.fold(0L) { total, entry -> Math.addExact(total, entry.coffeeDelta.toLong()) }
+        val rewardAdjustments = entries.fold(0L) { total, entry -> Math.addExact(total, entry.rewardDelta.toLong()) }
+        val lifetime = entries.fold(0L) { total, entry -> Math.addExact(total, entry.lifetimeDelta.toLong()) }
+        val previous = loyaltyAccount(phone)
+        saveLoyaltyAccount(LoyaltyAccount(
+            phone = phone,
+            customerName = previous?.customerName ?: phone,
+            coffeeProgress = Math.floorMod(coffeeTotal, 10L).toInt(),
+            freeCoffeesAvailable = Math.toIntExact(Math.addExact(Math.floorDiv(coffeeTotal, 10L), rewardAdjustments)),
+            lifetimeCoffeeCount = Math.toIntExact(lifetime.coerceAtLeast(0L)),
+            updatedAt = at
+        ))
+    }
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveSaleCost(cost: SaleCost)
     @Query("SELECT * FROM sale_costs WHERE saleId = :saleId")
@@ -343,6 +387,14 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         require(sale.status == "COMPLETED") { "Only completed, not-yet-refunded sales can be refunded." }
         require(isRefundSplitValid(sale.totalPaise, sale.cashPaidPaise, sale.upiPaidPaise, cashRefundPaise, upiRefundPaise)) {
             "Refund must preserve the original payment method split and equal the original bill total."
+        }
+        if (sale.customerPhone.matches(Regex("[0-9]{10}"))) {
+            ensureLoyaltyLedgerSeeded(sale.customerPhone, refundedAt)
+            val reversed = reversedLoyaltyEntryIds().filterNotNull().toSet()
+            loyaltyLedgerEntriesForSale(saleId).filter { it.id !in reversed }.forEach { entry ->
+                insertLoyaltyLedgerEntry(LoyaltyLedgerEntry(UUID.randomUUID().toString(), entry.phone, saleId, "REVERSAL", -entry.coffeeDelta, -entry.rewardDelta, -entry.lifetimeDelta, refundedAt, entry.id))
+            }
+            rebuildLoyaltyAccount(sale.customerPhone, refundedAt)
         }
         val movements = saleConsumptionMovements(saleId)
         require(movements.isNotEmpty()) { "No original stock consumption was found. Refund blocked to avoid an incomplete stock reversal." }
@@ -511,7 +563,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, CashMovement::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class, HeldOrder::class, HeldOrderLine::class, SalesReconciliation::class, SaleRefund::class, DeviceBinding::class, CctvAuditEvent::class], version = 27, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, CashMovement::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class, HeldOrder::class, HeldOrderLine::class, SalesReconciliation::class, SaleRefund::class, DeviceBinding::class, CctvAuditEvent::class, LoyaltyLedgerEntry::class], version = 28, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
