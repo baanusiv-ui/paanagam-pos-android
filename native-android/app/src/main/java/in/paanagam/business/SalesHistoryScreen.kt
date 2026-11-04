@@ -163,7 +163,7 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
         if (sales.isEmpty()) {
             Text("No sales recorded yet. Completed POS bills will appear here.", color = HistoryIvory)
         } else {
-            LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(sales, key = { it.id }) { sale ->
                     Card(colors = CardDefaults.cardColors(containerColor = HistoryPanel)) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
