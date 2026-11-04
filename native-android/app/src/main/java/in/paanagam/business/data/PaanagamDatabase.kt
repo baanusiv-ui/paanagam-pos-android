@@ -468,7 +468,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         val line = saleLines(saleId).firstOrNull { it.id == saleLineId } ?: error("Sale line does not belong to this bill.")
         val allSaleMovements = saleConsumptionMovements(saleId)
         val allLineMovements = allSaleMovements.filter { it.saleLineId == line.id }
-        require(allLineMovements.isNotEmpty() && allLineMovements.all { it.saleUnitIndex in 0 until line.quantity }) {
+        require(allLineMovements.isNotEmpty() && allLineMovements.all { it.saleUnitIndex != null && it.saleUnitIndex in 0 until line.quantity }) {
             "This bill predates per-unit FIFO traceability. Item refunds are blocked rather than guessing ingredient quantities."
         }
         val previousLineRefunds = saleLineRefunds(saleId).filter { it.saleLineId == saleLineId }
