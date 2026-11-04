@@ -551,7 +551,7 @@ private fun PosMenuPanel(
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(onClick = onShowHeld, enabled = !saving, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Held $heldCount", color = PosOrange) }
                         Spacer(Modifier.weight(1f))
-                        if (canManageMenu) TextButton(onClick = onToggleAdd, enabled = !saving, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(if (showAddItem) "Close" else "+ Menu item", color = PosBrown) }
+                        // Menu creation is handled in the dedicated admin Menu module.
                     }
                 }
             } else {
@@ -564,7 +564,7 @@ private fun PosMenuPanel(
                         modifier = Modifier.background(Color(0xFFF3E6C9), RoundedCornerShape(20.dp)).padding(horizontal = 10.dp, vertical = 7.dp))
                     TextButton(onClick = onShowHeld, enabled = !saving) { Text("Held $heldCount", color = PosOrange) }
                     Spacer(Modifier.width(6.dp))
-                    if (canManageMenu) TextButton(onClick = onToggleAdd, enabled = !saving) { Text(if (showAddItem) "Close" else "+ Menu item", color = PosBrown) }
+                    // Menu creation is handled in the dedicated admin Menu module.
                 }
             }
         }
