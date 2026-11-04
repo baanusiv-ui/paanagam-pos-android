@@ -6,7 +6,7 @@ Paanagam (பானகம்) is being developed as a standalone Android applica
 
 1. Open the repository's **Actions** tab.
 2. Select **Build Native Android APK**.
-3. Run the workflow on the `main` branch, or push a change under `native-android/`.
+3. Run the workflow on the `build-apk` branch, or push a change under `native-android/`.
 4. Download the `paanagam-native-debug-apk` artifact from a successful run.
 5. Extract `app-debug.apk` and install it on an Android device. Android may ask you to allow installation from the file manager or browser.
 
