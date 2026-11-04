@@ -113,7 +113,9 @@ fun ProductionScreen(db: PaanagamDatabase) {
                                     Text(itemName, style = MaterialTheme.typography.bodyMedium)
                                     Text("₹%.2f".format(record.costPaise / 100.0), style = MaterialTheme.typography.labelLarge)
                                 }
-                                Text("${record.quantityBaseUnits / 1000.0} ${ingredients.firstOrNull { it.id == record.ingredientId }?.baseUnit ?: ""} • ${record.location} • ${record.reason}", style = MaterialTheme.typography.bodySmall)
+                                val stockEffect = if (record.stockAdjusted) "Stock reduced" else "Stock unchanged"
+                                val sourceLabel = if (record.sourceType == "FOOD_REFUND") "Food refund" else "Manual wastage"
+                                Text("${record.quantityBaseUnits / 1000.0} ${ingredients.firstOrNull { it.id == record.ingredientId }?.baseUnit ?: ""} • ${record.location} • $sourceLabel • $stockEffect • ${record.reason}", style = MaterialTheme.typography.bodySmall)
                                 Divider()
                             }
                         }
