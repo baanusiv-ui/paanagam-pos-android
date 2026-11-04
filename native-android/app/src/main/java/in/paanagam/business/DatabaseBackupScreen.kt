@@ -98,9 +98,18 @@ private object PaanagamDatabaseBackup {
                 }
                 error("Could not install the restored database. The original database was preserved.")
             }
-        } catch (error: Throwable) {
-            if (!liveFile.exists() && previous.exists()) previous.renameTo(liveFile)
-            throw error
+        } catch (failure: Throwable) {
+            if (!liveFile.exists() && previous.exists() && !previous.renameTo(liveFile)) {
+                // Do not hide a failed rollback behind the original restore error:
+                // tell the operator exactly which recovery file must be preserved.
+                val recoveryFailure = IllegalStateException(
+                    "Restore failed and the original database could not be put back. " +
+                        "Keep " + previous.name + " untouched and reopen Paanagam for recovery."
+                )
+                recoveryFailure.addSuppressed(failure)
+                throw recoveryFailure
+            }
+            throw failure
         } finally {
             stagedPlain.delete()
             stagedEncrypted.delete()
