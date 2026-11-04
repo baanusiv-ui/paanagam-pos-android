@@ -322,7 +322,14 @@ class MainActivity : ComponentActivity() {
             db.close()
             if (recoveryFile.exists()) {
                 liveFile.delete()
-                recoveryFile.renameTo(liveFile)
+                check(recoveryFile.renameTo(liveFile)) {
+                    "Database open failed and the pre-restore database could not be recovered."
+                }
+            } else if (migrationRecoveryFile.exists()) {
+                liveFile.delete()
+                check(migrationRecoveryFile.renameTo(liveFile)) {
+                    "Room migration failed and the original plaintext database could not be recovered."
+                }
             }
             throw failure
         }
