@@ -86,6 +86,7 @@ fun MenuManagementScreen(db: PaanagamDatabase) {
         if (selected != null) {
             OutlinedTextField(name, { name = it }, label = { Text("Item name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(category, { category = it }, label = { Text("Category") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(sku, { sku = it.trimStart().take(32) }, label = { Text("Product code / SKU (optional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(price, { price = it }, label = { Text("Selling price (₹)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 Checkbox(isCoffee, { isCoffee = it })
