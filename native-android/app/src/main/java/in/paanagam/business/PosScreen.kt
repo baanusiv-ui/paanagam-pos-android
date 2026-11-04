@@ -477,7 +477,8 @@ private fun PosMenuPanel(
             }
             Text("OFFLINE READY", color = PosBrown, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
                 modifier = Modifier.background(Color(0xFFF3E6C9), RoundedCornerShape(20.dp)).padding(horizontal = 10.dp, vertical = 7.dp))
-            TextButton(onClick = onShowHeld, enabled = !saving) { Text("Held $heldCount", color = PosOrange) }\n            if (canSeedDemoMenu) TextButton(onClick = onSeedDemoMenu, enabled = !saving) { Text("Load sample data", color = PosOrange) }
+            TextButton(onClick = onShowHeld, enabled = !saving) { Text("Held $heldCount", color = PosOrange) }
+            if (canSeedDemoMenu) TextButton(onClick = onSeedDemoMenu, enabled = !saving) { Text("Load sample data", color = PosOrange) }
             Spacer(Modifier.width(6.dp))
             TextButton(onClick = onToggleAdd, enabled = !saving) { Text(if (showAddItem) "Close" else "+ Menu item", color = PosBrown) }
         }
