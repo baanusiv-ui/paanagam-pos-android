@@ -437,7 +437,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
             require(lots.map { it.location }.distinct().size == 1)
             val quantity = ingredientMovements.fold(0L) { total, movement -> Math.addExact(total, movement.quantityBaseUnits) }
             val cost = calculateFifoCostPaise(ingredientMovements.map { it.quantityBaseUnits to it.unitCostPaise })
-            val itemName = refundLineNames[lineId] ?: "Legacy sale item"
+            val itemName = lineId?.let { refundLineNames[it] } ?: "Legacy sale item"
             insertWastage(WastageRecord(
                 UUID.randomUUID().toString(), ingredientId, lots.first().location, quantity,
                 "FOOD REFUND • Sale $saleId • $itemName: ${reason.trim()}", refundedAt, cost,
