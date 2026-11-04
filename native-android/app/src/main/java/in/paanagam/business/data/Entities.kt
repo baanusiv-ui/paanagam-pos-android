@@ -20,8 +20,8 @@ data class PurchaseLine(@PrimaryKey val id: String, val purchaseId: String, val 
 @Entity(tableName = "stock_transfers")
 data class StockTransfer(@PrimaryKey val id: String, val fromLocation: String, val toLocation: String, val transferredAt: Long, val status: String = "COMPLETED")
 
-@Entity(tableName = "stock_movements")
-data class StockMovement(@PrimaryKey val id: String, val ingredientId: String, val lotId: String, val movementType: String, val fromLocation: String, val toLocation: String, val quantityBaseUnits: Long, val unitCostPaise: Long, val referenceId: String, val createdAt: Long)
+@Entity(tableName = "stock_movements", indices = [Index(value = ["saleLineId"])])
+data class StockMovement(@PrimaryKey val id: String, val ingredientId: String, val lotId: String, val movementType: String, val fromLocation: String, val toLocation: String, val quantityBaseUnits: Long, val unitCostPaise: Long, val referenceId: String, val createdAt: Long, val saleLineId: String? = null)
 
 @Entity(tableName = "stock_lots")
 data class StockLot(@PrimaryKey val id: String, val ingredientId: String, val location: String, val receivedAt: Long, val qtyBaseUnits: Long, val remainingBaseUnits: Long, val unit: String, val unitCostPaise: Long, val sourceLotId: String? = null)
@@ -148,6 +148,20 @@ data class SalesReconciliation(
     val countedCashPaise: Long,
     val note: String,
     val reconciledAt: Long
+)
+
+@Entity(tableName = "sale_line_refunds", indices = [Index(value = ["saleId"]), Index(value = ["saleLineId"])])
+data class SaleLineRefund(
+    @PrimaryKey val id: String,
+    val saleId: String,
+    val saleLineId: String,
+    val refundedQuantity: Int,
+    val amountPaise: Long,
+    val cashRefundPaise: Long,
+    val upiRefundPaise: Long,
+    val stockDisposition: String,
+    val reason: String,
+    val refundedAt: Long
 )
 
 @Entity(tableName = "sale_refunds", indices = [Index(value = ["saleId"])])
