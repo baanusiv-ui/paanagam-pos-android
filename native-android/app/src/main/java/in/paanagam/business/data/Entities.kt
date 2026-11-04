@@ -36,7 +36,7 @@ data class ProductionInput(@PrimaryKey val id: String, val batchId: String, val 
 data class WastageRecord(@PrimaryKey val id: String, val ingredientId: String, val location: String, val quantityBaseUnits: Long, val reason: String, val recordedAt: Long, val costPaise: Long, @ColumnInfo(defaultValue = "'MANUAL'") val sourceType: String = "MANUAL", val sourceId: String? = null, val sourceLineId: String? = null, @ColumnInfo(defaultValue = "1") val stockAdjusted: Boolean = true)
 
 @Entity(tableName = "sales")
-data class Sale(@PrimaryKey val id: String, val createdAt: Long, val totalPaise: Long, val paymentMethod: String, val status: String = "COMPLETED", val syncState: String = "LOCAL", val customerPhone: String = "", val shiftId: String? = null, @ColumnInfo(defaultValue = "0") val cashPaidPaise: Long = 0L, @ColumnInfo(defaultValue = "0") val upiPaidPaise: Long = 0L)
+data class Sale(@PrimaryKey val id: String, val createdAt: Long, val totalPaise: Long, val paymentMethod: String, val status: String = "COMPLETED", val syncState: String = "LOCAL", val customerPhone: String = "", val shiftId: String? = null, @ColumnInfo(defaultValue = "0") val cashPaidPaise: Long = 0L, @ColumnInfo(defaultValue = "0") val upiPaidPaise: Long = 0L, @ColumnInfo(defaultValue = "DINE_IN") val orderType: String = "DINE_IN")
 
 @Entity(tableName = "sop_documents")
 data class SopDocument(@PrimaryKey val id: String, val title: String, val category: String, val version: Int, val status: String, val instructions: String, val updatedAt: Long)
@@ -132,7 +132,7 @@ data class KitchenTicket(@PrimaryKey val saleId: String, val status: String = "N
 
 
 @Entity(tableName = "held_orders")
-data class HeldOrder(@PrimaryKey val id: String, val createdAt: Long, val customerPhone: String, val totalPaise: Long)
+data class HeldOrder(@PrimaryKey val id: String, val createdAt: Long, val customerPhone: String, val totalPaise: Long, @ColumnInfo(defaultValue = "DINE_IN") val orderType: String = "DINE_IN")
 
 @Entity(tableName = "held_order_lines", indices = [Index(value = ["orderId"])])
 data class HeldOrderLine(@PrimaryKey val id: String, val orderId: String, val itemId: String, val itemName: String, val quantity: Int, val unitPricePaise: Long)
