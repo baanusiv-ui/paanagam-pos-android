@@ -30,7 +30,6 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
     var selectedCostPaise by remember { mutableStateOf<Long?>(null) }
     var refundSaleId by remember { mutableStateOf<String?>(null) }
     var refundReason by remember { mutableStateOf("Customer return") }
-    var refundStockDisposition by remember { mutableStateOf("WASTED") }
     var message by remember { mutableStateOf("") }
     val todayStart = run {
         val calendar = java.util.Calendar.getInstance()
@@ -53,18 +52,11 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
                 title = { Text("Refund full bill?") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("This records a full-bill refund. Choose the physical stock outcome; served or opened food must not return to usable stock.")
+                        Text("This records a full-bill food refund. Returned food is always recorded as wastage and never returned to Store or Kitchen stock.")
                         Text("Cash: ₹%.2f • UPI: ₹%.2f".format((target?.cashPaidPaise ?: 0L) / 100.0, (target?.upiPaidPaise ?: 0L) / 100.0))
                         OutlinedTextField(refundReason, { refundReason = it }, label = { Text("Refund reason") }, modifier = Modifier.fillMaxWidth())
-                        Text("Food / ingredient disposition", fontWeight = FontWeight.SemiBold)
-                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            RadioButton(selected = refundStockDisposition == "WASTED", onClick = { refundStockDisposition = "WASTED" })
-                            Text("Served, opened or unsafe — record as wastage")
-                        }
-                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            RadioButton(selected = refundStockDisposition == "RESTOCK", onClick = { refundStockDisposition = "RESTOCK" })
-                            Text("Returned unopened and safe — restock")
-                        }
+                        Text("Food refund reason (required)", fontWeight = FontWeight.SemiBold)
+                        Text("The reason is saved against the wastage entries for the recipe ingredients. Refunded food is not reusable stock.")
                         Text("Cash refunds require an open cash shift. UPI refunds must also be reversed in the UPI app.", style = MaterialTheme.typography.bodySmall)
                     }
                 },
@@ -73,8 +65,8 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
                         val sale = target ?: return@TextButton
                         refundSaleId = null
                         scope.launch {
-                            runCatching { db.dao().refundCompletedSale(sale.id, refundReason, System.currentTimeMillis(), sale.cashPaidPaise, sale.upiPaidPaise, currentStaff.id, currentStaff.name, refundStockDisposition) }
-                                .onSuccess { message = if (refundStockDisposition == "RESTOCK") "Full refund recorded; returned stock restored." else "Full refund recorded; consumed stock remains consumed and is recorded as wastage." }
+                            runCatching { db.dao().refundCompletedSale(sale.id, refundReason, System.currentTimeMillis(), sale.cashPaidPaise, sale.upiPaidPaise, currentStaff.id, currentStaff.name) }
+                                .onSuccess { message = "Full food refund recorded. Returned food was logged as wastage; stock was not increased." }
                                 .onFailure { message = it.message ?: "Refund failed." }
                         }
                     }) { Text("Confirm refund") }
