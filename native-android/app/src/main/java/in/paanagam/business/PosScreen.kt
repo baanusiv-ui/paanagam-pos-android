@@ -68,7 +68,12 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
         redeemFreeCoffee = false
     }
 
-    val categories = remember(catalog) { listOf("All") + catalog.map { it.category.ifBlank { "Other" } }.distinct().sorted() }
+    val categories = remember(catalog) {
+        listOf("All") + catalog.filter { it.active }.map { it.category.ifBlank { "Other" } }.distinct().sorted()
+    }
+    LaunchedEffect(categories) {
+        if (selectedCategory !in categories) selectedCategory = "All"
+    }
     val visibleItems = remember(catalog, selectedCategory, search) {
         catalog.filter { item ->
             item.active &&
