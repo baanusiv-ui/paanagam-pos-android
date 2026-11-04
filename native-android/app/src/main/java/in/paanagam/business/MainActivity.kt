@@ -364,7 +364,7 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, databaseKey: By
     }
     var showMore by remember { mutableStateOf(false) }
     val sops by db.dao().sops().collectAsState(initial = emptyList())
-    val primaryTabs = listOf("Dashboard", "POS", "Inventory", "Sales History", "More")
+    val primaryTabs = if (activeStaff == null) listOf("Dashboard", "POS", "Inventory", "Sales History", "More") else listOf("Dashboard", "POS", "Inventory", "Sales History", "More").filter { tab -> tab == "More" || canAccess(activeStaff!!, tab) }
     MaterialTheme(
         colorScheme = lightColorScheme(
             primary = Gold, onPrimary = Color.White, secondary = Espresso,
@@ -501,7 +501,7 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, databaseKey: By
 private val ADMIN_ONLY_MODULES = setOf("Staff & HR", "WhatsApp Settings", "Data Backup", "CCTV & Audit")
 private val ADMIN_DATA_MODULES = setOf("Inventory", "Purchases", "Store → Kitchen", "Kitchen Stock", "Sales History", "Reports", "Food Cost", "Finance & P&L", "Stock Reconciliation", "Sales Reconciliation", "Suppliers")
 private val MANAGER_DEFAULT_MODULES = modules.filterNot { it in ADMIN_ONLY_MODULES + setOf("Business Planner", "Marketing Automation", "Automation Hub") }.toSet()
-private val CASHIER_DEFAULT_MODULES = setOf("Dashboard", "POS", "Orders", "Sales History", "Cash Shift")
+private val CASHIER_DEFAULT_MODULES = setOf("Dashboard", "POS", "Orders", "Cash Shift")
 
 private fun defaultModules(role: String): Set<String> = when (role) {
     "ADMIN" -> modules.toSet()
