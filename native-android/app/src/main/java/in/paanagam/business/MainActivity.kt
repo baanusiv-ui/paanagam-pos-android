@@ -33,6 +33,7 @@ import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
 import java.util.UUID
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.flowOf
 
 private val Espresso = Color(0xFF3A2519)
 private val Ivory = Color(0xFFFFF8E9)
@@ -790,11 +791,18 @@ private fun MoreModulesScreen(items: List<String>, onSelect: (String) -> Unit) {
 
 @Composable
 private fun DashboardScreen(db: PaanagamDatabase, adminView: Boolean, onNavigate: (String) -> Unit) {
-    val sales by db.dao().sales().collectAsState(initial = emptyList())
-    val saleCosts by db.dao().saleCosts().collectAsState(initial = emptyList())
-    val wastage by db.dao().wastageRecords().collectAsState(initial = emptyList())
-    val refunds by db.dao().allSaleRefunds().collectAsState(initial = emptyList())
-    val lowStockCount by db.dao().lowStockCount().collectAsState(initial = 0)
+    // Cashier sessions must not subscribe to business-wide financial or stock queries.
+    // Empty flows keep the composable shape stable while enforcing data minimisation.
+    val salesFlow = if (adminView) db.dao().sales() else flowOf(emptyList())
+    val saleCostsFlow = if (adminView) db.dao().saleCosts() else flowOf(emptyList())
+    val wastageFlow = if (adminView) db.dao().wastageRecords() else flowOf(emptyList())
+    val refundsFlow = if (adminView) db.dao().allSaleRefunds() else flowOf(emptyList())
+    val lowStockFlow = if (adminView) db.dao().lowStockCount() else flowOf(0)
+    val sales by salesFlow.collectAsState(initial = emptyList())
+    val saleCosts by saleCostsFlow.collectAsState(initial = emptyList())
+    val wastage by wastageFlow.collectAsState(initial = emptyList())
+    val refunds by refundsFlow.collectAsState(initial = emptyList())
+    val lowStockCount by lowStockFlow.collectAsState(initial = 0)
     val todayStart = remember {
         java.util.Calendar.getInstance().apply {
             set(java.util.Calendar.HOUR_OF_DAY, 0)
