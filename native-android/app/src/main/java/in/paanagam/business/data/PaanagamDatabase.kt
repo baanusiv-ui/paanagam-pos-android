@@ -381,6 +381,12 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     suspend fun updateSaleStatus(saleId: String, status: String)
     @Query("SELECT * FROM stock_movements WHERE referenceId = :saleId AND movementType = 'SALE_CONSUMPTION'")
     suspend fun saleConsumptionMovements(saleId: String): List<StockMovement>
+    @Query("SELECT * FROM stock_movements WHERE saleLineId = :saleLineId AND saleUnitIndex = :unitIndex AND movementType = 'SALE_CONSUMPTION' ORDER BY ingredientId, lotId")
+    suspend fun saleUnitConsumptionMovements(saleLineId: String, unitIndex: Int): List<StockMovement>
+    @Query("SELECT * FROM sale_line_refunds WHERE saleId = :saleId ORDER BY refundedAt, saleLineId, saleUnitIndex")
+    suspend fun saleLineRefunds(saleId: String): List<SaleLineRefund>
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertSaleLineRefund(refund: SaleLineRefund)
     @Query("SELECT * FROM stock_lots WHERE id = :lotId")
     suspend fun stockLot(lotId: String): StockLot?
     @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -428,6 +434,113 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         updateKitchenTicketStatus(saleId, "CANCELLED", refundedAt)
         insertCctvAuditEvent(CctvAuditEvent(UUID.randomUUID().toString(), saleId, "SALE_REFUND", reason.trim(), sale.totalPaise, cashierId, cashierName, refundedAt, "LOCAL_BOOKMARK"))
     }
+    @Transaction
+    suspend fun refundSaleLineQuantity(
+        saleId: String,
+        saleLineId: String,
+        requestedQuantity: Int,
+        reason: String,
+        refundedAt: Long,
+        cashierId: String,
+        cashierName: String
+    ) {
+        require(reason.isNotBlank()) { "Enter a food refund reason." }
+        require(requestedQuantity > 0) { "Refund quantity must be at least one." }
+        val sale = saleById(saleId) ?: error("Sale not found.")
+        require(sale.status == "COMPLETED" || sale.status == "PARTIALLY_REFUNDED") {
+            "Only completed or partially refunded sales can receive another item refund."
+        }
+        val line = saleLines(saleId).firstOrNull { it.id == saleLineId } ?: error("Sale line does not belong to this bill.")
+        val previousLineRefunds = saleLineRefunds(saleId).filter { it.saleLineId == saleLineId }
+        val alreadyRefundedIndexes = previousLineRefunds.map { it.saleUnitIndex }.toSet()
+        require(alreadyRefundedIndexes.none { it < 0 }) {
+            "This bill has legacy refund records without unit traceability. Use the full-bill refund workflow."
+        }
+        val availableIndexes = (0 until line.quantity).filterNot { it in alreadyRefundedIndexes }
+        require(requestedQuantity <= availableIndexes.size) {
+            "Refund quantity exceeds the remaining quantity for this item."
+        }
+        val refundIndexes = availableIndexes.take(requestedQuantity)
+        val saleRefundsBefore = saleRefunds(saleId)
+        val previousAmount = saleRefundsBefore.fold(0L) { total, item -> Math.addExact(total, item.amountPaise) }
+        val previousCash = saleRefundsBefore.fold(0L) { total, item -> Math.addExact(total, item.cashRefundPaise) }
+        val previousUpi = saleRefundsBefore.fold(0L) { total, item -> Math.addExact(total, item.upiRefundPaise) }
+        require(Math.addExact(previousAmount, Math.multiplyExact(line.unitPricePaise, requestedQuantity.toLong())) <= sale.totalPaise) {
+            "Refund exceeds the remaining bill value."
+        }
+        if (sale.customerPhone.matches(Regex("[0-9]{10}"))) ensureLoyaltyLedgerSeeded(sale.customerPhone, refundedAt)
+        val isCoffee = catalogItem(line.itemId)?.isCoffee == true
+        var addedCash = 0L
+        var addedUpi = 0L
+        var addedAmount = 0L
+        refundIndexes.forEach { unitIndex ->
+            val movements = saleUnitConsumptionMovements(line.id, unitIndex)
+            require(movements.isNotEmpty()) {
+                "Exact FIFO trace is unavailable for this sold unit. Refund blocked rather than guessing ingredient quantities."
+            }
+            require(movements.all { it.saleUnitIndex == unitIndex && it.saleLineId == line.id && it.referenceId == saleId && it.quantityBaseUnits > 0 }) {
+                "The original unit stock trace is incomplete. Refund blocked."
+            }
+            val unitAmount = line.unitPricePaise
+            val allocation = PartialRefundRules.allocateTender(
+                sale.totalPaise, sale.cashPaidPaise, sale.upiPaidPaise,
+                Math.addExact(previousAmount, addedAmount),
+                Math.addExact(previousCash, addedCash),
+                Math.addExact(previousUpi, addedUpi),
+                unitAmount
+            )
+            movements.forEach { movement ->
+                val lot = stockLot(movement.lotId) ?: error("Original FIFO lot is missing. Refund blocked.")
+                require(lot.ingredientId == movement.ingredientId && lot.location == movement.fromLocation)
+                val cost = calculateFifoCostPaise(listOf(movement.quantityBaseUnits to movement.unitCostPaise))
+                insertWastage(WastageRecord(
+                    UUID.randomUUID().toString(), movement.ingredientId, lot.location,
+                    movement.quantityBaseUnits,
+                    "FOOD REFUND • Sale $saleId • ${line.itemName} • Unit ${unitIndex + 1}: ${reason.trim()}",
+                    refundedAt, cost
+                ))
+            }
+            insertSaleLineRefund(SaleLineRefund(
+                UUID.randomUUID().toString(), saleId, line.id, 1, unitIndex,
+                unitAmount, allocation.cashPaise, allocation.upiPaise, "WASTED",
+                reason.trim(), refundedAt
+            ))
+            insertSaleRefund(SaleRefund(
+                UUID.randomUUID().toString(), saleId, refundedAt, unitAmount,
+                allocation.cashPaise, allocation.upiPaise,
+                "${line.itemName} ×1 • ${reason.trim()}"
+            ))
+            addedAmount = Math.addExact(addedAmount, unitAmount)
+            addedCash = Math.addExact(addedCash, allocation.cashPaise)
+            addedUpi = Math.addExact(addedUpi, allocation.upiPaise)
+        }
+        if (addedCash > 0L) {
+            val shift = getOpenCashShift() ?: error("Open a cash shift before issuing a cash refund.")
+            insertCashMovement(CashMovement(UUID.randomUUID().toString(), shift.id, "REFUND", addedCash, "Sale $saleId • ${line.itemName} • $reason", refundedAt))
+        }
+        if (isCoffee && sale.customerPhone.matches(Regex("[0-9]{10}"))) {
+            val paidCoffee = line.unitPricePaise > 0L
+            insertLoyaltyLedgerEntry(LoyaltyLedgerEntry(
+                UUID.randomUUID().toString(), sale.customerPhone, saleId, "PARTIAL_REFUND",
+                if (paidCoffee) -requestedQuantity else 0,
+                if (paidCoffee) 0 else requestedQuantity,
+                if (paidCoffee) -requestedQuantity else 0,
+                refundedAt
+            ))
+            rebuildLoyaltyAccount(sale.customerPhone, refundedAt)
+        }
+        val allLines = saleLines(saleId)
+        val allRefunded = allLines.all { saleLine ->
+            saleLineRefunds(saleId).filter { it.saleLineId == saleLine.id }.sumOf { it.refundedQuantity } >= saleLine.quantity
+        }
+        updateSaleStatus(saleId, if (allRefunded) "REFUNDED" else "PARTIALLY_REFUNDED")
+        if (allRefunded) updateKitchenTicketStatus(saleId, "CANCELLED", refundedAt)
+        insertCctvAuditEvent(CctvAuditEvent(
+            UUID.randomUUID().toString(), saleId, "SALE_PARTIAL_REFUND", reason.trim(),
+            addedAmount, cashierId, cashierName, refundedAt, "LOCAL_BOOKMARK"
+        ))
+    }
+
     @Query("SELECT * FROM sales ORDER BY createdAt DESC")
     fun sales(): Flow<List<Sale>>
     @Query("SELECT * FROM sale_costs")
