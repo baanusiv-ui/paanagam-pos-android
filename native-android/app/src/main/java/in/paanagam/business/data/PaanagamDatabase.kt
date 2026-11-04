@@ -133,7 +133,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
             closedAt = closedAt,
             expectedCashPaise = expected,
             countedCashPaise = countedCashPaise,
-            variancePaise = countedCashPaise - expected,
+            variancePaise = Math.subtractExact(countedCashPaise, expected),
             notes = notes,
             status = "CLOSED"
         )
