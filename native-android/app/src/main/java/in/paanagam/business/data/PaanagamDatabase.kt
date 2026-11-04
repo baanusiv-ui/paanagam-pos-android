@@ -224,6 +224,14 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     suspend fun saveCatalog(items: List<CatalogItem>)
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveCatalogItem(item: CatalogItem)
+    @Query("SELECT COUNT(*) FROM catalog_items WHERE sku != '' AND sku = :sku COLLATE NOCASE AND id != :exceptId")
+    suspend fun catalogSkuCount(sku: String, exceptId: String): Int
+    @Transaction
+    suspend fun saveCatalogItemWithSku(item: CatalogItem) {
+        val code = item.sku.trim()
+        require(code.isEmpty() || catalogSkuCount(code, item.id) == 0) { "This product code is already assigned to another menu item." }
+        saveCatalogItem(item.copy(sku = code))
+    }
     @Insert
     suspend fun recordSale(sale: Sale)
     @Insert suspend fun recordSaleLines(lines: List<SaleLine>)
