@@ -52,7 +52,7 @@ The current APK is a development build. Do not use it for live business transact
 - PINs are stored as salted PBKDF2-HMAC-SHA256 hashes (120,000 iterations), not plaintext.
 - Staff login now persists failed-attempt counters per staff account. Five incorrect PIN attempts trigger a 30-second lockout, with exponential increases up to 15 minutes; a successful login clears the lockout state.
 - Admin can deactivate and reactivate staff accounts.
-- Admin has full module access; Manager is restricted from staff administration and selected configuration modules; Cashier is limited to Dashboard, POS, Orders and Sales History.
+- Admin has full module access; Manager is restricted from staff administration and selected configuration modules; Cashier is limited to Dashboard, POS, Orders and Cash Shift. Sales History, inventory and financial reporting remain Admin-only.
 - Staff records are local to this device. There is no cloud account sync or remote recovery yet.
 - An authenticated staff session is forced back to the PIN login screen after the app has remained in the background for five minutes. Returning sooner preserves the active session.
 - Admin-only offline backup and restore uses Android's document picker. Backups are SQLite-integrity checked and schema-version checked before restore; the current database is preserved until validation passes. Device-level recovery testing is still required.
