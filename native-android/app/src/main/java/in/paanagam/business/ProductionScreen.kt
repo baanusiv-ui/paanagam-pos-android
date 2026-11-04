@@ -1,6 +1,8 @@
 package `in`.paanagam.business
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
@@ -34,7 +36,7 @@ fun ProductionScreen(db: PaanagamDatabase) {
         if (decoction.isBlank()) decoction = ingredients.firstOrNull { it.name.contains("decoction", true) }?.id ?: ""
         if (wastageItem.isBlank()) wastageItem = ingredients.firstOrNull()?.id ?: ""
     }
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Kitchen production & wastage", style = MaterialTheme.typography.titleLarge)
         Text("Coffee decoction standard: 250 g powder + 1,100 ml water → 1,000 ml usable decoction; 100 ml retained in grounds.")
         Card {
