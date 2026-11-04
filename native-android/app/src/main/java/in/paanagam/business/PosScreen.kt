@@ -569,20 +569,42 @@ private fun PosMenuPanel(
             }
         }
         if (showAddItem && canManageMenu) {
-            Card(colors = CardDefaults.cardColors(containerColor = PosIvory)) {
-                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(newName, onNewName, label = { Text("Item name") }, modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !saving)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedTextField(newCategory, onNewCategory, label = { Text("Category") }, modifier = Modifier.weight(1f), singleLine = true, enabled = !saving)
-                        OutlinedTextField(newPrice, onNewPrice, label = { Text("Price ₹") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), enabled = !saving)
+            AlertDialog(
+                onDismissRequest = { if (!saving) onToggleAdd() },
+                title = { Text("Add menu item", color = PosWalnut) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = newName, onValueChange = onNewName,
+                            label = { Text("Item name") }, modifier = Modifier.fillMaxWidth(),
+                            singleLine = true, enabled = !saving
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = newCategory, onValueChange = onNewCategory,
+                                label = { Text("Category") }, modifier = Modifier.weight(1f),
+                                singleLine = true, enabled = !saving
+                            )
+                            OutlinedTextField(
+                                value = newPrice, onValueChange = onNewPrice,
+                                label = { Text("Price ₹") }, modifier = Modifier.weight(1f),
+                                singleLine = true, enabled = !saving,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = newIsCoffee, onCheckedChange = onNewIsCoffee, enabled = !saving)
+                            Text("Counts toward coffee loyalty", color = PosBrown, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = newIsCoffee, onCheckedChange = onNewIsCoffee, enabled = !saving)
-                        Text("Counts toward coffee loyalty", color = PosBrown, style = MaterialTheme.typography.bodySmall)
-                    }
-                    Button(onClick = onSaveNew, enabled = !saving, colors = ButtonDefaults.buttonColors(containerColor = PosWalnut)) { Text("Save menu item") }
+                },
+                confirmButton = {
+                    TextButton(onClick = onSaveNew, enabled = !saving) { Text("Save item") }
+                },
+                dismissButton = {
+                    TextButton(onClick = onToggleAdd, enabled = !saving) { Text("Cancel") }
                 }
-            }
+            )
         }
         BoxWithConstraints(Modifier.weight(1f)) {
             val columns = when { maxWidth >= 900.dp -> 3; maxWidth >= 560.dp -> 3; else -> 2 }
