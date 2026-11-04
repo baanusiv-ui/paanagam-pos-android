@@ -20,6 +20,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import `in`.paanagam.business.data.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import java.util.UUID
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -112,6 +113,30 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                 message = "Cancellation was not applied because its audit record could not be saved: " +
                     (error.message ?: "database error")
             }
+        }
+    }
+
+    val canSeedDemoMenu = staff.role == "ADMIN" && catalog.isEmpty() && !saving
+    fun loadDemoMenu() {
+        if (!canSeedDemoMenu) return
+        saving = true
+        scope.launch {
+            runCatching {
+                val existing = db.dao().allCatalog().first()
+                check(existing.isEmpty()) { "Menu already contains items. Demo data was not added." }
+                db.dao().saveCatalog(
+                    listOf(
+                        CatalogItem("demo-filter-coffee", "Filter Coffee", "Beverages", 2500L, isCoffee = true),
+                        CatalogItem("demo-strong-coffee", "Strong Filter Coffee", "Beverages", 3000L, isCoffee = true),
+                        CatalogItem("demo-ginger-tea", "Ginger Tea", "Tea", 2000L),
+                        CatalogItem("demo-lemon-tea", "Lemon Tea", "Tea", 2500L),
+                        CatalogItem("demo-masala-sundal", "Masala Sundal", "Snacks", 3000L),
+                        CatalogItem("demo-chicken-fry", "Chicken Fry", "Non-Veg", 9000L)
+                    )
+                )
+            }.onSuccess { message = "6 sample menu items loaded. These are demo prices, not stock or sales records." }
+             .onFailure { message = it.message ?: "Could not load sample menu." }
+            saving = false
         }
     }
 
@@ -446,7 +471,7 @@ private fun PosMenuPanel(
             }
             Text("OFFLINE READY", color = PosBrown, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
                 modifier = Modifier.background(Color(0xFFF3E6C9), RoundedCornerShape(20.dp)).padding(horizontal = 10.dp, vertical = 7.dp))
-            TextButton(onClick = onShowHeld, enabled = !saving) { Text("Held $heldCount", color = PosOrange) }
+            TextButton(onClick = onShowHeld, enabled = !saving) { Text("Held $heldCount", color = PosOrange) }\n            if (canSeedDemoMenu) TextButton(onClick = onSeedDemoMenu, enabled = !saving) { Text("Load sample data", color = PosOrange) }
             Spacer(Modifier.width(6.dp))
             TextButton(onClick = onToggleAdd, enabled = !saving) { Text(if (showAddItem) "Close" else "+ Menu item", color = PosBrown) }
         }
