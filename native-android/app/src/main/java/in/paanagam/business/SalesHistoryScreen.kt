@@ -60,11 +60,11 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
             val target = sales.firstOrNull { it.id == id }
             AlertDialog(
                 onDismissRequest = { refundSaleId = null },
-                title = { Text("Refund full bill?") },
+                title = { Text("Refund remaining bill balance?") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("This records a full-bill food refund. Returned food is always recorded as wastage and never returned to Store or Kitchen stock.")
-                        Text("Cash: ₹%.2f • UPI: ₹%.2f".format((target?.cashPaidPaise ?: 0L) / 100.0, (target?.upiPaidPaise ?: 0L) / 100.0))
+                        Text("This refunds only the bill units that have not already been refunded. Each returned food unit is recorded as wastage and never returned to Store or Kitchen stock.")
+                        Text("The remaining amount and original Cash / UPI tender allocation are calculated from the recorded refund history.")
                         OutlinedTextField(refundReason, { refundReason = it }, label = { Text("Refund reason") }, modifier = Modifier.fillMaxWidth())
                         Text("Food refund reason (required)", fontWeight = FontWeight.SemiBold)
                         Text("The reason is saved against the wastage entries for the recipe ingredients. Refunded food is not reusable stock.")
@@ -76,8 +76,8 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
                         val sale = target ?: return@TextButton
                         refundSaleId = null
                         scope.launch {
-                            runCatching { db.dao().refundCompletedSale(sale.id, refundReason, System.currentTimeMillis(), sale.cashPaidPaise, sale.upiPaidPaise, currentStaff.id, currentStaff.name) }
-                                .onSuccess { message = "Full food refund recorded. Returned food was logged as wastage; stock was not increased." }
+                            runCatching { db.dao().refundRemainingSaleBalance(sale.id, refundReason, System.currentTimeMillis(), currentStaff.id, currentStaff.name) }
+                                .onSuccess { message = "Remaining bill balance refunded. Returned food was logged as wastage; stock was not increased." }
                                 .onFailure { message = it.message ?: "Refund failed." }
                         }
                     }) { Text("Confirm refund") }
@@ -187,8 +187,8 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
                                         scope.launch { selectedLines = db.dao().saleLines(sale.id); selectedCostPaise = db.dao().saleCost(sale.id)?.ingredientCostPaise ?: 0L }
                                     }
                                 }) { Text(if (expandedSaleId == sale.id) "Hide items" else "View items", color = HistoryGold) }
-                                if (sale.status == "COMPLETED") {
-                                    TextButton(onClick = { refundSaleId = sale.id; refundReason = "Customer return" }) { Text("Full refund", color = Color(0xFFFFB59A)) }
+                                if (sale.status == "COMPLETED" || sale.status == "PARTIALLY_REFUNDED") {
+                                    TextButton(onClick = { refundSaleId = sale.id; refundReason = "Customer return" }) { Text(if (sale.status == "PARTIALLY_REFUNDED") "Refund remaining" else "Full refund", color = Color(0xFFFFB59A)) }
                                 }
                                 if (sale.status == "COMPLETED" || sale.status == "PARTIALLY_REFUNDED") {
                                     TextButton(onClick = {
