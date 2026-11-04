@@ -47,4 +47,20 @@ class InventoryRulesTest {
         assertFalse(isRefundSplitValid(10000L, 4000L, 6000L, 4000L, 5000L))
         assertFalse(isRefundSplitValid(10000L, -1L, 10001L, -1L, 10001L))
     }
+    @Test fun decoctionLotSegmentsPreserveEveryPaiseWithoutRoundingUp() {
+        val segments = allocateFifoLotSegments(1_000_000L, 12_345L)
+        assertEquals(listOf(345_000L to 13L, 655_000L to 12L), segments)
+        assertEquals(12_345L, calculateFifoCostPaise(segments))
+        assertEquals(1_000_000L, segments.sumOf { it.first })
+    }
+
+    @Test fun decoctionLotWithNoRemainderStaysAsOneLot() {
+        assertEquals(listOf(1_000_000L to 12L), allocateFifoLotSegments(1_000_000L, 12_000L))
+    }
+
+    @Test fun fifoCostAllocationRejectsInvalidLotInputs() {
+        assertFalse(runCatching { allocateFifoLotSegments(999L, 100L) }.isSuccess)
+        assertFalse(runCatching { allocateFifoLotSegments(1000L, -1L) }.isSuccess)
+    }
+
 }
