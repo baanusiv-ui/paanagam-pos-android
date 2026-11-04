@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- No cleartext HTTP, system CAs only. Add a <domain-config> with a <pin-set> for the
+     Supabase project domain when the sync client is introduced. RTSP camera streams use raw
+     sockets and are NOT governed by this file. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

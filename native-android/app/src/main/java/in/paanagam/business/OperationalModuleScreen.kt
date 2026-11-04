@@ -50,7 +50,8 @@ private val moduleGuidance = mapOf(
 
 @Composable
 fun OperationalModuleScreen(db: PaanagamDatabase, module: String) {
-    val records by db.dao().operationalRecords(module).collectAsState(initial = emptyList())
+    val recordsFlow = remember(db, module) { db.dao().operationalRecords(module) }
+    val records by recordsFlow.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var title by remember(module) { mutableStateOf("") }
     var details by remember(module) { mutableStateOf("") }

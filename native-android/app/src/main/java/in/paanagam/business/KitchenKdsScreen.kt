@@ -15,7 +15,7 @@ import java.util.Locale
 
 @Composable
 fun KitchenKdsScreen(db: PaanagamDatabase) {
-    val allTickets by db.dao().kitchenTickets().collectAsState(initial = emptyList())
+    val allTickets by rememberDbFlow(db, emptyList()) { d -> d.kitchenTickets() }
     val scope = rememberCoroutineScope()
     var linesBySale by remember { mutableStateOf<Map<String, List<SaleLine>>>(emptyMap()) }
     var showCompleted by remember { mutableStateOf(false) }

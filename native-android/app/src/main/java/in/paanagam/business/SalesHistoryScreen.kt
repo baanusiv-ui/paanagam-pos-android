@@ -25,8 +25,8 @@ private val HistoryPanel = Color(0xFF3A2519)
 
 @Composable
 fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
-    val sales by db.dao().sales().collectAsState(initial = emptyList())
-    val refunds by db.dao().allSaleRefunds().collectAsState(initial = emptyList())
+    val sales by rememberDbFlow(db, emptyList()) { d -> d.sales() }
+    val refunds by rememberDbFlow(db, emptyList()) { d -> d.allSaleRefunds() }
     val scope = rememberCoroutineScope()
     var expandedSaleId by remember { mutableStateOf<String?>(null) }
     var selectedLines by remember { mutableStateOf<List<SaleLine>>(emptyList()) }
@@ -75,7 +75,7 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
                     TextButton(enabled = target != null && refundReason.isNotBlank(), onClick = {
                         val sale = target ?: return@TextButton
                         refundSaleId = null
-                        scope.launch {
+                        commitScope.launch {
                             runCatching { db.dao().refundRemainingSaleBalance(sale.id, refundReason, System.currentTimeMillis(), currentStaff.id, currentStaff.name) }
                                 .onSuccess { message = "Remaining bill balance refunded. Returned food was logged as wastage; stock was not increased." }
                                 .onFailure { message = it.message ?: "Refund failed." }
@@ -136,7 +136,7 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
                             val line = selectedLine ?: return@TextButton
                             val qty = quantity ?: return@TextButton
                             partialRefundSaleId = null
-                            scope.launch {
+                            commitScope.launch {
                                 runCatching {
                                     db.dao().refundSaleLineQuantity(
                                         sale.id, line.id, qty, partialRefundReason.trim(),
@@ -184,7 +184,7 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
                                         expandedSaleId = sale.id
                                         selectedLines = emptyList()
                                         selectedCostPaise = null
-                                        scope.launch { selectedLines = db.dao().saleLines(sale.id); selectedCostPaise = db.dao().saleCost(sale.id)?.ingredientCostPaise ?: 0L }
+                                        commitScope.launch { selectedLines = db.dao().saleLines(sale.id); selectedCostPaise = db.dao().saleCost(sale.id)?.ingredientCostPaise ?: 0L }
                                     }
                                 }) { Text(if (expandedSaleId == sale.id) "Hide items" else "View items", color = HistoryGold) }
                                 if (sale.status == "COMPLETED" || sale.status == "PARTIALLY_REFUNDED") {
@@ -196,7 +196,7 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
                                         partialRefundLineId = null
                                         partialRefundQuantity = "1"
                                         partialRefundReason = "Customer return"
-                                        scope.launch {
+                                        commitScope.launch {
                                             partialRefundLines = db.dao().saleLines(sale.id)
                                             val refunds = db.dao().saleLineRefunds(sale.id)
                                             partialRefundedByLine = refunds.groupBy { it.saleLineId }.mapValues { (_, rows) -> rows.sumOf { it.refundedQuantity } }

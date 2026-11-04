@@ -24,8 +24,8 @@ import java.math.RoundingMode
 
 @Composable
 fun CashShiftScreen(db: PaanagamDatabase) {
-    val active by db.dao().activeCashShift().collectAsState(initial = null)
-    val shifts by db.dao().cashShifts().collectAsState(initial = emptyList())
+    val active by rememberDbFlow(db, null) { d -> d.activeCashShift() }
+    val shifts by rememberDbFlow(db, emptyList()) { d -> d.cashShifts() }
     val scope = rememberCoroutineScope()
     var opening by remember { mutableStateOf("") }
     var counted by remember { mutableStateOf("") }
@@ -35,7 +35,8 @@ fun CashShiftScreen(db: PaanagamDatabase) {
     var movementType by remember { mutableStateOf("CASH_IN") }
     var movementAmount by remember { mutableStateOf("") }
     var movementNote by remember { mutableStateOf("") }
-    val movements by db.dao().cashMovements(active?.id ?: "").collectAsState(initial = emptyList())
+    val movementsFlow = remember(db, active?.id) { db.dao().cashMovements(active?.id ?: "") }
+    val movements by movementsFlow.collectAsState(initial = emptyList())
     val money: (String) -> Long? = { value ->
         runCatching { BigDecimal(value).movePointRight(2).setScale(0, RoundingMode.UNNECESSARY).longValueExact().takeIf { it >= 0 } }.getOrNull()
     }
@@ -47,7 +48,7 @@ fun CashShiftScreen(db: PaanagamDatabase) {
             Button(enabled = !busy && money(opening) != null, onClick = {
                 val amount = money(opening) ?: 0L
                 busy = true
-                scope.launch {
+                commitScope.launch {
                     runCatching { db.dao().openCashShift(CashShift(UUID.randomUUID().toString(), System.currentTimeMillis(), amount)) }
                         .onSuccess { opening = ""; message = "Cash shift opened." }
                         .onFailure { message = it.message ?: "Could not open shift." }
@@ -74,7 +75,7 @@ fun CashShiftScreen(db: PaanagamDatabase) {
                 val amount = money(movementAmount) ?: return@Button
                 val shiftId = active?.id ?: return@Button
                 busy = true
-                scope.launch {
+                commitScope.launch {
                     runCatching { db.dao().recordCashMovement(CashMovement(id = UUID.randomUUID().toString(), shiftId = shiftId, type = movementType, amountPaise = amount, note = movementNote.trim(), createdAt = System.currentTimeMillis())) }
                         .onSuccess { movementAmount = ""; movementNote = ""; message = "Cash movement recorded." }
                         .onFailure { message = it.message ?: "Could not record cash movement." }
@@ -90,7 +91,7 @@ fun CashShiftScreen(db: PaanagamDatabase) {
             Button(enabled = !busy && money(counted) != null, onClick = {
                 val amount = money(counted) ?: 0L
                 busy = true
-                scope.launch {
+                commitScope.launch {
                     runCatching { db.dao().closeCashShift(amount, notes.trim(), System.currentTimeMillis()) }
                         .onSuccess { closed -> message = "Shift closed. Expected ₹%.2f • Counted ₹%.2f • Variance ₹%.2f".format((closed.expectedCashPaise ?: 0L)/100.0, amount/100.0, (closed.variancePaise ?: 0L)/100.0); counted = ""; notes = "" }
                         .onFailure { message = it.message ?: "Could not close shift." }

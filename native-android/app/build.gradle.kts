@@ -11,8 +11,9 @@ android {
         applicationId = "in.paanagam.business"
         minSdk = 26
         targetSdk = 35
-        versionCode = 73
-        versionName = "0.3.2"
+        versionCode = 74
+        versionName = "0.3.3"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -21,6 +22,25 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    signingConfigs {
+        create("release") {
+            System.getenv("PAANAGAM_KEYSTORE_PATH")?.let { path ->
+                storeFile = file(path)
+                storePassword = System.getenv("PAANAGAM_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("PAANAGAM_KEY_ALIAS")
+                keyPassword = System.getenv("PAANAGAM_KEY_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (System.getenv("PAANAGAM_KEYSTORE_PATH") != null) signingConfig = signingConfigs.getByName("release")
+        }
+    }
+    sourceSets { getByName("androidTest").assets.srcDir("$projectDir/schemas") }
     buildFeatures { compose = true }
 }
 ksp {
@@ -48,5 +68,8 @@ dependencies {
     ksp("androidx.room:room-compiler:2.8.5")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.room:room-testing:2.8.5")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

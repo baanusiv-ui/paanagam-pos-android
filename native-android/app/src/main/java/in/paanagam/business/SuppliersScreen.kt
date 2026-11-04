@@ -18,7 +18,7 @@ import java.util.UUID
 
 @Composable
 fun SuppliersScreen(db: PaanagamDatabase) {
-    val suppliers by db.dao().suppliers().collectAsState(initial = emptyList())
+    val suppliers by rememberDbFlow(db, emptyList()) { d -> d.suppliers() }
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var contact by remember { mutableStateOf("") }
