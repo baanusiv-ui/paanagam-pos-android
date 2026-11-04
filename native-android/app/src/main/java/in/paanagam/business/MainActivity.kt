@@ -466,7 +466,7 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, databaseKey: By
                         "CCTV & Audit" -> AdminReauthGate(activeStaff!!, "CCTV & Audit") { CctvScreen(db, activeStaff!!) }
                         "POS" -> PosScreen(db, activeStaff!!)
                         "Menu" -> MenuManagementScreen(db)
-                        "Recipes & BOM / SOP" -> RecipeScreen(db)
+                        "Recipes & BOM / SOP", "BOM" -> RecipeScreen(db)
                         "SOP Library" -> SopScreen(sops)
                         "Inventory", "Purchases", "Store → Kitchen", "Kitchen Stock" -> InventoryScreen(db, selected)
                         "Production", "Wastage" -> ProductionScreen(db)
