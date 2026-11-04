@@ -424,9 +424,11 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         }
         val movements = saleConsumptionMovements(saleId)
         require(movements.isNotEmpty()) { "No original stock consumption was found. Refund blocked to avoid an incomplete stock reversal." }
-        // Aggregate returned recipe quantities by ingredient. The original sale
-        // already consumed these ingredients; this is a cost/audit entry only.
-        movements.groupBy { it.ingredientId }.forEach { (ingredientId, ingredientMovements) ->
+        // Match the original sale-cost rounding boundary (sale line + ingredient).
+        // These records document food loss; the original sale already consumed stock.
+        val refundLineNames = saleLines(saleId).associate { it.id to it.itemName }
+        movements.groupBy { it.saleLineId to it.ingredientId }.forEach { (lineAndIngredient, ingredientMovements) ->
+            val (lineId, ingredientId) = lineAndIngredient
             val lots = ingredientMovements.map { movement ->
                 val lot = stockLot(movement.lotId) ?: error("Original FIFO lot is missing. Refund blocked.")
                 require(lot.ingredientId == movement.ingredientId && lot.location == movement.fromLocation && movement.quantityBaseUnits > 0)
@@ -435,9 +437,10 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
             require(lots.map { it.location }.distinct().size == 1)
             val quantity = ingredientMovements.fold(0L) { total, movement -> Math.addExact(total, movement.quantityBaseUnits) }
             val cost = calculateFifoCostPaise(ingredientMovements.map { it.quantityBaseUnits to it.unitCostPaise })
+            val itemName = refundLineNames[lineId] ?: "Legacy sale item"
             insertWastage(WastageRecord(
                 UUID.randomUUID().toString(), ingredientId, lots.first().location, quantity,
-                "FOOD REFUND • Sale $saleId: ${reason.trim()}", refundedAt, cost
+                "FOOD REFUND • Sale $saleId • $itemName: ${reason.trim()}", refundedAt, cost
             ))
         }
         if (cashRefundPaise > 0) {
