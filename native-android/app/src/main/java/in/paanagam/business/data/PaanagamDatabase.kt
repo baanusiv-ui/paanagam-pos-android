@@ -440,7 +440,8 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
             val itemName = refundLineNames[lineId] ?: "Legacy sale item"
             insertWastage(WastageRecord(
                 UUID.randomUUID().toString(), ingredientId, lots.first().location, quantity,
-                "FOOD REFUND • Sale $saleId • $itemName: ${reason.trim()}", refundedAt, cost
+                "FOOD REFUND • Sale $saleId • $itemName: ${reason.trim()}", refundedAt, cost,
+                sourceType = "FOOD_REFUND", sourceId = saleId, sourceLineId = lineId, stockAdjusted = false
             ))
         }
         if (cashRefundPaise > 0) {
@@ -523,7 +524,8 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
                 insertWastage(WastageRecord(
                     UUID.randomUUID().toString(), ingredientId, lots.first().location, quantity,
                     "FOOD REFUND • Sale $saleId • ${line.itemName} • Unit ${unitIndex + 1}: ${reason.trim()}",
-                    refundedAt, exactUnitCost
+                    refundedAt, exactUnitCost,
+                    sourceType = "FOOD_REFUND", sourceId = saleId, sourceLineId = line.id, stockAdjusted = false
                 ))
             }
             insertSaleLineRefund(SaleLineRefund(
@@ -660,6 +662,9 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
 
     @Transaction
     suspend fun saveWastage(item: WastageRecord) {
+        require(item.sourceType == "MANUAL" && item.sourceId == null && item.sourceLineId == null && item.stockAdjusted) {
+            "Refund-linked wastage is audit-only and must not deduct stock a second time."
+        }
         val ingredient = ingredient(item.ingredientId) ?: error("Wastage ingredient not found.")
         if (ingredient.isCoffeePowder) {
             require(ingredient.baseUnit == "g" && item.quantityBaseUnits % 250000L == 0L) {
@@ -713,7 +718,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
 
 }
 
-@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, CashMovement::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class, HeldOrder::class, HeldOrderLine::class, SalesReconciliation::class, SaleRefund::class, SaleLineRefund::class, DeviceBinding::class, CctvAuditEvent::class, LoyaltyLedgerEntry::class], version = 30, exportSchema = true)
+@Database(entities = [CatalogItem::class, Ingredient::class, StockLot::class, Purchase::class, PurchaseLine::class, StockTransfer::class, StockMovement::class, ProductionBatch::class, ProductionInput::class, WastageRecord::class, Sale::class, SaleLine::class, SopDocument::class, SopCheck::class, RecipeLine::class, SaleCost::class, StaffMember::class, OperationalRecord::class, StockReconciliation::class, LoyaltyAccount::class, CashShift::class, CashMovement::class, Supplier::class, NextDayPlan::class, ComboComponent::class, KitchenTicket::class, HeldOrder::class, HeldOrderLine::class, SalesReconciliation::class, SaleRefund::class, SaleLineRefund::class, DeviceBinding::class, CctvAuditEvent::class, LoyaltyLedgerEntry::class], version = 31, exportSchema = true)
 abstract class PaanagamDatabase : RoomDatabase() {
     abstract fun dao(): PaanagamDao
 }
