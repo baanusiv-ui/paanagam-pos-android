@@ -660,6 +660,8 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
 
     @Query("SELECT * FROM sales ORDER BY createdAt DESC")
     fun sales(): Flow<List<Sale>>
+    @Query("SELECT COUNT(*) FROM sales")
+    fun salesCount(): Flow<Int>
     @Query("SELECT * FROM sale_costs")
     fun saleCosts(): Flow<List<SaleCost>>
     @Query("SELECT * FROM sale_lines WHERE saleId = :saleId")
