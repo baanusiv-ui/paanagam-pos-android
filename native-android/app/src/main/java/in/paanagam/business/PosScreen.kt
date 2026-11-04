@@ -481,7 +481,6 @@ private fun PosMenuPanel(
             Text("OFFLINE READY", color = PosBrown, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
                 modifier = Modifier.background(Color(0xFFF3E6C9), RoundedCornerShape(20.dp)).padding(horizontal = 10.dp, vertical = 7.dp))
             TextButton(onClick = onShowHeld, enabled = !saving) { Text("Held $heldCount", color = PosOrange) }
-            if (canSeedDemoMenu) TextButton(onClick = onSeedDemoMenu, enabled = !saving) { Text("Load sample data", color = PosOrange) }
             Spacer(Modifier.width(6.dp))
             TextButton(onClick = onToggleAdd, enabled = !saving) { Text(if (showAddItem) "Close" else "+ Menu item", color = PosBrown) }
         }
@@ -598,6 +597,7 @@ private fun PosMenuPanel(
                                 Text("☕", style = MaterialTheme.typography.headlineLarge)
                                 Text("No menu items found", color = PosWalnut, fontWeight = FontWeight.SemiBold)
                                 Text("Add a menu item or change the search.", color = PosMuted, style = MaterialTheme.typography.bodySmall)
+                                if (canSeedDemoMenu) Button(onClick = onSeedDemoMenu, enabled = !saving, colors = ButtonDefaults.buttonColors(containerColor = PosOrange)) { Text("Load 6 sample menu items") }
                             }
                         }
                     } else {
@@ -670,7 +670,7 @@ private fun PosCartPanel(
     if (compact) {
         var showCustomerDetails by remember { mutableStateOf(false) }
         Card(
-            modifier.fillMaxWidth().heightIn(max = 330.dp),
+            modifier.fillMaxWidth().heightIn(max = 250.dp),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = PosWalnut)
         ) {
