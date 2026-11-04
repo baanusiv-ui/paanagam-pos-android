@@ -25,6 +25,7 @@ import java.math.RoundingMode
 @Composable
 fun SalesReconciliationScreen(db: PaanagamDatabase) {
     val sales by db.dao().sales().collectAsState(initial = emptyList())
+    val refunds by db.dao().allSaleRefunds().collectAsState(initial = emptyList())
     val history by db.dao().salesReconciliations().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
@@ -34,9 +35,10 @@ fun SalesReconciliationScreen(db: PaanagamDatabase) {
     var note by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
 
-    val daySales = sales.filter { it.status == "COMPLETED" && dateFormat.format(Date(it.createdAt)) == businessDate }
-    val posCash = daySales.sumOf { it.cashPaidPaise }
-    val posUpi = daySales.sumOf { it.upiPaidPaise }
+    val daySales = sales.filter { it.status in setOf("COMPLETED", "PARTIALLY_REFUNDED", "REFUNDED") && dateFormat.format(Date(it.createdAt)) == businessDate }
+    val dayRefunds = refunds.filter { dateFormat.format(Date(it.refundedAt)) == businessDate }
+    val posCash = daySales.sumOf { it.cashPaidPaise } - dayRefunds.sumOf { it.cashRefundPaise }
+    val posUpi = daySales.sumOf { it.upiPaidPaise } - dayRefunds.sumOf { it.upiRefundPaise }
     val receivedPaise = parseRupeesToPaise(upiReceived)
     val countedPaise = parseRupeesToPaise(cashCounted)
     val upiVariance = (receivedPaise ?: 0L) - posUpi
@@ -46,7 +48,7 @@ fun SalesReconciliationScreen(db: PaanagamDatabase) {
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Daily settlement check", style = MaterialTheme.typography.titleLarge, color = Color(0xFF2B1B12), fontWeight = FontWeight.Bold)
-        Text("Compare completed POS bills with cash sales collected and UPI settlement received. Exclude the opening float here; reconcile the float separately in Cash Shift.", color = Color(0xFF718078), style = MaterialTheme.typography.bodySmall)
+        Text("Compare POS payment collections less refunds issued on this business date with cash sales collected and UPI settlement received. Exclude the opening float here; reconcile the float separately in Cash Shift.", color = Color(0xFF718078), style = MaterialTheme.typography.bodySmall)
         Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -58,8 +60,8 @@ fun SalesReconciliationScreen(db: PaanagamDatabase) {
                 )
                 Text("POS totals", color = Color(0xFFB87928), fontWeight = FontWeight.Bold)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Completed bills: ${daySales.size}")
-                    Text("₹%.2f".format(daySales.sumOf { it.totalPaise } / 100.0), fontWeight = FontWeight.Bold)
+                    Text("Bills: ${daySales.size} • refunds: ${dayRefunds.size}")
+                    Text("Net tender: ₹%.2f".format((posCash + posUpi) / 100.0), fontWeight = FontWeight.Bold)
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Cash sales")
