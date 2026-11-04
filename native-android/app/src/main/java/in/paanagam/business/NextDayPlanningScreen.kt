@@ -39,10 +39,26 @@ fun NextDayPlanningScreen(db: PaanagamDatabase) {
     LaunchedEffect(planDate, dayPlans, ingredients) {
         loading = true
         val totals = mutableMapOf<String, Long>()
-        dayPlans.forEach { plan ->
-            db.dao().recipeLines(plan.menuItemId).forEach { line ->
-                totals[line.ingredientId] = (totals[line.ingredientId] ?: 0L) + line.quantityBaseUnits * plan.plannedQuantity
+        suspend fun expandRequirements(menuItemId: String, multiplier: Long, path: Set<String>) {
+            require(menuItemId !in path) { "Circular combo detected in preparation plan." }
+            val nextPath = path + menuItemId
+            val components = db.dao().comboComponents(menuItemId)
+            if (components.isNotEmpty()) {
+                components.forEach { component ->
+                    val componentMultiplier = Math.multiplyExact(multiplier, component.quantity.toLong())
+                    expandRequirements(component.componentItemId, componentMultiplier, nextPath)
+                }
+            } else {
+                val recipe = db.dao().recipeLines(menuItemId)
+                require(recipe.isNotEmpty()) { "Recipe missing for a planned menu item or combo component." }
+                recipe.forEach { line ->
+                    val required = Math.multiplyExact(line.quantityBaseUnits, multiplier)
+                    totals[line.ingredientId] = Math.addExact(totals[line.ingredientId] ?: 0L, required)
+                }
             }
+        }
+        dayPlans.forEach { plan ->
+            expandRequirements(plan.menuItemId, plan.plannedQuantity.toLong(), emptySet())
         }
         stockLines = totals.mapNotNull { (ingredientId, required) ->
             val item = ingredients.firstOrNull { it.id == ingredientId } ?: return@mapNotNull null
