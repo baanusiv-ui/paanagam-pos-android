@@ -764,6 +764,7 @@ private fun DashboardScreen(db: PaanagamDatabase, onNavigate: (String) -> Unit) 
     val sales by db.dao().sales().collectAsState(initial = emptyList())
     val saleCosts by db.dao().saleCosts().collectAsState(initial = emptyList())
     val wastage by db.dao().wastageRecords().collectAsState(initial = emptyList())
+    val refunds by db.dao().allSaleRefunds().collectAsState(initial = emptyList())
     val lowStockCount by db.dao().lowStockCount().collectAsState(initial = 0)
     val todayStart = remember {
         java.util.Calendar.getInstance().apply {
@@ -773,9 +774,11 @@ private fun DashboardScreen(db: PaanagamDatabase, onNavigate: (String) -> Unit) 
             set(java.util.Calendar.MILLISECOND, 0)
         }.timeInMillis
     }
-    val todaySales = sales.filter { it.createdAt >= todayStart && it.status == "COMPLETED" }
+    val todaySales = sales.filter { it.createdAt >= todayStart && it.status in setOf("COMPLETED", "PARTIALLY_REFUNDED", "REFUNDED") }
     val todaySaleIds = todaySales.map { it.id }.toSet()
-    val todayRevenue = todaySales.sumOf { it.totalPaise }
+    val todayGross = todaySales.sumOf { it.totalPaise }
+    val todayRefundTotal = refunds.filter { it.refundedAt >= todayStart }.sumOf { it.amountPaise }
+    val todayRevenue = todayGross - todayRefundTotal
     val todayCost = saleCosts.filter { it.saleId in todaySaleIds }.sumOf { it.ingredientCostPaise }
     val todayWastage = wastage.filter { it.recordedAt >= todayStart }.sumOf { it.costPaise }
     val foodCost = if (todayRevenue > 0) todayCost.toDouble() / todayRevenue * 100.0 else 0.0
@@ -796,7 +799,7 @@ private fun DashboardScreen(db: PaanagamDatabase, onNavigate: (String) -> Unit) 
                     Text("Business dashboard", color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Text("Today's sales", color = Color(0xFFE8D9C4), style = MaterialTheme.typography.labelMedium)
                     Text("₹%.2f".format(todayRevenue / 100.0), color = Color.White, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                    Text("${todaySales.size} completed bills  •  Saved on this device", color = Color(0xFFE8D9C4), style = MaterialTheme.typography.bodySmall)
+                    Text("${todaySales.size} bills • refunds deducted • Saved on this device", color = Color(0xFFE8D9C4), style = MaterialTheme.typography.bodySmall)
                     Button(onClick = { onNavigate("POS") }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE97832), contentColor = Color.White)) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
