@@ -345,6 +345,8 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                 PosMenuPanel(
                     modifier = Modifier.weight(1f),
                     saving = saving,
+                    orderMode = orderMode,
+                    onOrderMode = { orderMode = it },
                     categories = categories,
                     selectedCategory = selectedCategory,
                     onCategory = { selectedCategory = it },
