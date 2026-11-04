@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.room.Room
 import androidx.room.migration.Migration
@@ -487,8 +488,8 @@ private fun AdminSetupScreen(onCreate: (String, String) -> Unit) {
         Text("Set up Paanagam Admin", color = Ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("Create the first administrator account. Choose a private 4–8 digit PIN.", color = Color(0xFF65736B))
         OutlinedTextField(name, { name = it }, label = { Text("Admin name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("Admin PIN") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(confirm, { confirm = it.filter(Char::isDigit).take(8) }, label = { Text("Confirm PIN") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("Admin PIN") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(confirm, { confirm = it.filter(Char::isDigit).take(8) }, label = { Text("Confirm PIN") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
         if (error.isNotBlank()) Text(error, color = Color.Red)
         Button(onClick = { if (name.isBlank() || pin.length !in 4..8 || pin != confirm) error = "Enter a name and matching 4–8 digit PIN." else onCreate(name, pin) }, modifier = Modifier.fillMaxWidth()) { Text("Create Admin account") }
     }
@@ -527,7 +528,7 @@ private fun StaffLoginScreen(db: PaanagamDatabase, onLogin: (StaffMember) -> Uni
                 Column { Text(member.name, color = Ink, fontWeight = FontWeight.Medium); Text(member.role, color = Color(0xFF718078), style = MaterialTheme.typography.labelSmall) }
             }
         }
-        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("PIN") }, singleLine = true, enabled = System.currentTimeMillis() >= lockoutUntil, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("PIN") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), enabled = System.currentTimeMillis() >= lockoutUntil, modifier = Modifier.fillMaxWidth())
         if (error.isNotBlank()) Text(error, color = Color.Red)
         Button(
             onClick = {
@@ -605,6 +606,7 @@ private fun AdminReauthGate(staff: StaffMember, actionTitle: String, content: @C
                 onValueChange = { pin = it.filter(Char::isDigit).take(8) },
                 label = { Text("Admin PIN") },
                 singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
                 enabled = System.currentTimeMillis() >= lockoutUntil,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -659,7 +661,7 @@ private fun StaffAdminScreen(db: PaanagamDatabase, current: StaffMember) {
         Text("Staff access management", color = Gold, style = MaterialTheme.typography.titleLarge)
         Text("Android-only local login. Admin creates cashier and manager accounts, assigns a private PIN, controls module access and can reset or deactivate access. PINs are salted PBKDF2 hashes stored on this device.", color = Color(0xFF65736B))
         OutlinedTextField(name, { name = it }, label = { Text("Staff name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("Initial / reset PIN (4–8 digits)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(8) }, label = { Text("Initial / reset PIN (4–8 digits)") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
         Row { FilterChip(selected = role == "CASHIER", onClick = { role = "CASHIER" }, label = { Text("Cashier") }); Spacer(Modifier.width(8.dp)); FilterChip(selected = role == "MANAGER", onClick = { role = "MANAGER" }, label = { Text("Manager") }) }
         Button(onClick = { scope.launch { if (name.isBlank() || pin.length !in 4..8) message = "Enter staff name and valid PIN." else { val c = pinCredentials(pin); db.dao().insertStaff(StaffMember(UUID.randomUUID().toString(), name.trim(), role, c.first, c.second, true, System.currentTimeMillis())); name = ""; pin = ""; message = "Staff account created." } } }, modifier = Modifier.fillMaxWidth()) { Text("Create staff account") }
         if (message.isNotBlank()) Text(message, color = Gold)
