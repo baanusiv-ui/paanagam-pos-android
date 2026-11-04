@@ -766,6 +766,7 @@ private fun PosCartPanel(
 ) {
     if (compact) {
         var showCustomerDetails by remember { mutableStateOf(false) }
+        var expanded by remember { mutableStateOf(false) }
         Card(
             modifier.fillMaxWidth().heightIn(max = 250.dp),
             shape = RoundedCornerShape(16.dp),
@@ -778,6 +779,17 @@ private fun PosCartPanel(
                         Text(if (showCustomerDetails) "Hide customer" else if (customerPhone.isBlank()) "Add customer" else "Customer ✓", color = PosMustard)
                     }
                 }
+                if (!expanded) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column {
+                            Text(if (cart.isEmpty()) "No items selected" else "$itemCount items in bill", color = PosIvory, style = MaterialTheme.typography.bodySmall)
+                            Text("₹%.2f".format(total / 100.0), color = PosMustard, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        }
+                        Button(onClick = { expanded = true }, enabled = !saving, colors = ButtonDefaults.buttonColors(containerColor = PosOrange)) {
+                            Text(if (cart.isEmpty()) "View bill" else "Checkout")
+                        }
+                    }
+                } else {
                 if (cart.isEmpty()) {
                     Text("Select items from the menu", color = Color(0xFFD8C5A8), style = MaterialTheme.typography.bodySmall)
                 } else {
@@ -861,6 +873,10 @@ private fun PosCartPanel(
                     }
                 }
                 if (message.isNotBlank()) Text(message, color = if (message.contains("success", true) || message.contains("added", true)) PosMustard else Color(0xFFFFC28D), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                TextButton(onClick = { expanded = false }, enabled = !saving, modifier = Modifier.align(Alignment.End), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                    Text("Collapse bill", color = PosMustard, style = MaterialTheme.typography.labelSmall)
+                }
+                }
             }
         }
     } else {
