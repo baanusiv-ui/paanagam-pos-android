@@ -34,3 +34,22 @@ internal fun isRefundSplitValid(originalTotalPaise: Long, originalCashPaise: Lon
             Math.addExact(refundCashPaise, refundUpiPaise) == originalTotalPaise
     }.getOrDefault(false)
 }
+
+
+/**
+ * Splits a lot's exact total cost into integer per-1,000-unit rates.
+ * The premium segment is consumed first so the final aggregate cost is exact.
+ */
+internal fun allocateFifoLotSegments(quantityBaseUnits: Long, totalCostPaise: Long): List<Pair<Long, Long>> {
+    require(quantityBaseUnits > 0L && quantityBaseUnits % 1000L == 0L)
+    require(totalCostPaise >= 0L)
+    val baseRate = totalCostPaise / (quantityBaseUnits / 1000L)
+    val remainder = totalCostPaise % (quantityBaseUnits / 1000L)
+    if (remainder == 0L) return listOf(quantityBaseUnits to baseRate)
+    val premiumQuantity = Math.multiplyExact(remainder, 1000L)
+    val regularQuantity = Math.subtractExact(quantityBaseUnits, premiumQuantity)
+    return buildList {
+        add(premiumQuantity to Math.addExact(baseRate, 1L))
+        if (regularQuantity > 0L) add(regularQuantity to baseRate)
+    }
+}
