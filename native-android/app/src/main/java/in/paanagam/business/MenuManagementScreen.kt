@@ -1,6 +1,8 @@
 package `in`.paanagam.business
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -39,7 +41,7 @@ fun MenuManagementScreen(db: PaanagamDatabase) {
         }
     }
 
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Menu management", style = MaterialTheme.typography.titleLarge)
         Text("Edit existing menu items, prices, categories and coffee loyalty eligibility. Deactivated items remain in past bills.")
         if (items.isEmpty()) {
@@ -60,7 +62,7 @@ fun MenuManagementScreen(db: PaanagamDatabase) {
                         .onSuccess { name = ""; category = ""; price = ""; isCoffee = false; message = "First menu item created." }
                         .onFailure { message = it.message ?: "Could not create menu item." }
                 }
-            }) { Text("Create first menu item") }
+            }) { Text("Save menu item") }
         }
         LazyColumn(Modifier.heightIn(max = 220.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             items(items, key = { it.id }) { item ->
