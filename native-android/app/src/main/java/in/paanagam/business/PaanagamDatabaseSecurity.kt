@@ -16,6 +16,8 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+const val PAANAGAM_DATABASE_SCHEMA_VERSION = 33
+
 /**
  * Owns the per-install database key and the one-time plaintext -> SQLCipher conversion.
  * The raw database passphrase is wrapped by an Android Keystore AES-GCM key; only the
@@ -137,7 +139,7 @@ internal object PaanagamDatabaseSecurity {
             val version = db.rawQuery("PRAGMA user_version", emptyArray<String>()).use {
                 if (it.moveToFirst()) it.getInt(0) else 0
             }
-            require(version in 1..27) { "Unsupported Paanagam database version: $version." }
+            require(version in 1..PAANAGAM_DATABASE_SCHEMA_VERSION) { "Unsupported Paanagam database version: $version." }
             val tables = mutableSetOf<String>()
             db.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", emptyArray<String>()).use { cursor ->
                 while (cursor.moveToNext()) tables.add(cursor.getString(0))
@@ -194,7 +196,7 @@ internal object PaanagamDatabaseSecurity {
                 check(integrity.equals("ok", true)) { "Encrypted database failed integrity validation." }
             }
             val version = scalarInt(db, "PRAGMA user_version")
-            check(version in 1..27) { "Unexpected encrypted database schema version: $version." }
+            check(version in 1..PAANAGAM_DATABASE_SCHEMA_VERSION) { "Unexpected encrypted database schema version: $version." }
         } finally {
             db.close()
         }
