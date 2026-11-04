@@ -35,7 +35,7 @@ private val PosMuted = Color(0xFF887766)
 @Composable
 fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
     val catalog by db.dao().catalog().collectAsState(initial = emptyList())
-    val sales by db.dao().sales().collectAsState(initial = emptyList())
+    val salesCount by db.dao().salesCount().collectAsState(initial = 0)
     val heldOrders by db.dao().heldOrders().collectAsState(initial = emptyList())
     val recipeLines by db.dao().allRecipeLines().collectAsState(initial = emptyList())
     val comboComponents by db.dao().allComboComponents().collectAsState(initial = emptyList())
@@ -293,7 +293,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                     saving = saving,
                     canCheckout = canCheckout,
                     message = message,
-                    salesCount = sales.size,
+                    salesCount = salesCount,
                     onDecrease = { id, item, qty ->
                         saving = true
                         recordPreCheckoutAudit("CART_ITEM_VOID", "Reduced ${item.name} quantity by 1 before checkout", item.pricePaise) {
