@@ -6,7 +6,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "catalog_items")
-data class CatalogItem(@PrimaryKey val id: String, val name: String, val category: String, val pricePaise: Long, val active: Boolean = true, val isCoffee: Boolean = false)
+data class CatalogItem(@PrimaryKey val id: String, val name: String, val category: String, val pricePaise: Long, val active: Boolean = true, val isCoffee: Boolean = false, @ColumnInfo(defaultValue = "''") val sku: String = "")
 
 @Entity(tableName = "ingredients")
 data class Ingredient(@PrimaryKey val id: String, val name: String, val baseUnit: String, val isCoffeePowder: Boolean = false, val active: Boolean = true, val storeMinStockBaseUnits: Long = 0L, val kitchenMinStockBaseUnits: Long = 0L)
