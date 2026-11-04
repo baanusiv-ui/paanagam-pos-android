@@ -23,6 +23,7 @@ fun MenuManagementScreen(db: PaanagamDatabase) {
     var selectedId by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
+    var sku by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
     var isCoffee by remember { mutableStateOf(false) }
     var active by remember { mutableStateOf(true) }
@@ -35,6 +36,7 @@ fun MenuManagementScreen(db: PaanagamDatabase) {
         if (item != null) {
             name = item.name
             category = item.category
+            sku = item.sku
             price = BigDecimal.valueOf(item.pricePaise, 2).toPlainString()
             isCoffee = item.isCoffee
             active = item.active
@@ -48,6 +50,7 @@ fun MenuManagementScreen(db: PaanagamDatabase) {
             Text("No menu items yet. Create your first item below or load sample items from POS.")
             OutlinedTextField(name, { name = it }, label = { Text("First item name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(category, { category = it }, label = { Text("Category") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(sku, { sku = it.trimStart().take(32) }, label = { Text("Product code / SKU (optional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(price, { price = it }, label = { Text("Selling price (₹)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 Checkbox(isCoffee, { isCoffee = it })
@@ -60,8 +63,8 @@ fun MenuManagementScreen(db: PaanagamDatabase) {
                     if (name.isBlank() || category.isBlank() || paise == null || paise <= 0L) {
                         message = "Enter a name, category and valid price (up to 2 decimal places)."
                     } else scope.launch {
-                        runCatching { db.dao().saveCatalogItem(CatalogItem(UUID.randomUUID().toString(), name.trim(), category.trim(), paise, isCoffee = isCoffee, active = true)) }
-                            .onSuccess { name = ""; category = ""; price = ""; isCoffee = false; message = "First menu item created."; selectedId = "" }
+                        runCatching { db.dao().saveCatalogItemWithSku(CatalogItem(UUID.randomUUID().toString(), name.trim(), category.trim(), paise, isCoffee = isCoffee, active = true, sku = sku.trim())) }
+                            .onSuccess { name = ""; category = ""; sku = ""; price = ""; isCoffee = false; message = "First menu item created."; selectedId = "" }
                             .onFailure { message = it.message ?: "Could not create menu item." }
                     }
                 }
@@ -73,7 +76,7 @@ fun MenuManagementScreen(db: PaanagamDatabase) {
                 items(items, key = { it.id }) { item ->
                     ListItem(
                         headlineContent = { Text(item.name) },
-                        supportingContent = { Text("₹%.2f • %s%s".format(item.pricePaise / 100.0, item.category, if (item.active) "" else " • Inactive")) },
+                        supportingContent = { Text("₹%.2f • %s%s%s".format(item.pricePaise / 100.0, item.category, if (item.sku.isBlank()) "" else " • ${item.sku}", if (item.active) "" else " • Inactive")) },
                         trailingContent = { RadioButton(selected = item.id == selectedId, onClick = { selectedId = item.id }) },
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -100,7 +103,7 @@ fun MenuManagementScreen(db: PaanagamDatabase) {
                         message = "Enter a name, category and valid price (up to 2 decimal places)."
                     } else {
                         scope.launch {
-                            runCatching { db.dao().saveCatalogItem(selected.copy(name = name.trim(), category = category.trim(), pricePaise = paise, isCoffee = isCoffee, active = active)) }
+                            runCatching { db.dao().saveCatalogItemWithSku(selected.copy(name = name.trim(), category = category.trim(), pricePaise = paise, isCoffee = isCoffee, active = active, sku = sku.trim())) }
                                 .onSuccess { message = "Menu item updated." }
                                 .onFailure { message = it.message ?: "Could not update menu item." }
                         }
