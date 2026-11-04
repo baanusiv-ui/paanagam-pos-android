@@ -73,7 +73,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
         catalog.filter { item ->
             item.active &&
                 (selectedCategory == "All" || item.category.ifBlank { "Other" } == selectedCategory) &&
-                (search.isBlank() || item.name.contains(search.trim(), ignoreCase = true))
+                (search.isBlank() || item.name.contains(search.trim(), ignoreCase = true) || item.sku.contains(search.trim(), ignoreCase = true))
         }
     }
     val cartItems = cart.values.toList()
