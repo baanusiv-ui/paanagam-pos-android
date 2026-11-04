@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
@@ -59,6 +60,7 @@ fun CctvScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
     var path by remember { mutableStateOf("/stream1") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var revealPassword by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Camera not connected") }
     var showSettings by remember { mutableStateOf(true) }
     var zoom by remember { mutableFloatStateOf(1f) }
@@ -184,7 +186,19 @@ fun CctvScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
                     OutlinedTextField(host, { host = it }, label = { Text("Camera IP address") }, placeholder = { Text("192.168.1.100") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(path, { path = it }, label = { Text("RTSP stream path") }, placeholder = { Text("/stream1") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(username, { username = it }, label = { Text("Camera username") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(password, { password = it }, label = { Text("Camera password") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Camera password") },
+                        singleLine = true,
+                        visualTransformation = if (revealPassword) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            TextButton(onClick = { revealPassword = !revealPassword }) {
+                                Text(if (revealPassword) "Hide" else "Show")
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     Button(onClick = { connectCamera() }, modifier = Modifier.fillMaxWidth()) { Text("Connect camera") }
                     Text("Camera credentials are encrypted with an Android Keystore AES-GCM key on this device.", color = Color(0xFF718078), style = MaterialTheme.typography.bodySmall)
                 }
