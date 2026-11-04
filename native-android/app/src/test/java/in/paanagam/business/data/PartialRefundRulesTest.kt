@@ -23,6 +23,12 @@ class PartialRefundRulesTest {
         assertEquals(4000L, first.upiPaise + second.upiPaise + last.upiPaise)
     }
 
+    @Test fun zeroValueRewardRefundDoesNotAllocateCashOrUpi() {
+        val allocation = PartialRefundRules.allocateTender(1000L, 600L, 400L, 0L, 0L, 0L, 0L)
+        assertEquals(0L, allocation.cashPaise)
+        assertEquals(0L, allocation.upiPaise)
+    }
+
     @Test fun rejectsCumulativeRefundAboveOriginalBill() {
         assertThrows(IllegalArgumentException::class.java) {
             PartialRefundRules.allocateTender(1000L, 500L, 500L, 900L, 450L, 450L, 101L)
