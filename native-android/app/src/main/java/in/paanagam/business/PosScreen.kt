@@ -168,7 +168,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                 title = { Text("Cancel current POS cart?") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("This cart has not been checked out. Enter a reason; the cashier, amount and camera-time bookmark will be saved to the audit log before the cart is cleared.")
+                        Text("This cart has not been checked out. Enter a reason; the cashier, amount and time will be saved in the local audit log before the cart is cleared.")
                         OutlinedTextField(
                             value = cancelReason,
                             onValueChange = { cancelReason = it },
@@ -309,7 +309,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                 )
             }
         } else {
-            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.fillMaxSize().imePadding(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 PosMenuPanel(
                     modifier = Modifier.weight(1f),
                     saving = saving,
@@ -338,7 +338,8 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                     }
                 )
                 PosCartPanel(
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 250.dp, max = 390.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    compact = true,
                     cart = cartItems,
                     total = total,
                     itemCount = itemCount,
@@ -523,6 +524,7 @@ private fun PosMenuPanel(
 @Composable
 private fun PosCartPanel(
     modifier: Modifier,
+    compact: Boolean = false,
     cart: List<Pair<CatalogItem, Int>>,
     total: Long,
     itemCount: Int,
@@ -550,111 +552,191 @@ private fun PosCartPanel(
     onHold: () -> Unit,
     onCheckout: () -> Unit
 ) {
-    Card(
-        modifier,
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = PosWalnut)
-    ) {
-        Column(Modifier.fillMaxSize().padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    Text("Bill / Order", color = PosIvory, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("Current counter order", color = Color(0xFFD8C5A8), style = MaterialTheme.typography.labelSmall)
-                }
-                Text("$itemCount items", color = PosWalnut, modifier = Modifier.background(PosMustard, RoundedCornerShape(20.dp)).padding(horizontal = 10.dp, vertical = 6.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-            }
-            if (cart.isEmpty()) {
-                Box(Modifier.weight(1f).fillMaxWidth().background(Color(0xFF503625), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("🧾", style = MaterialTheme.typography.headlineLarge)
-                        Text("Select items from the menu", color = PosIvory, style = MaterialTheme.typography.bodyMedium)
+    if (compact) {
+        var showCustomerDetails by remember { mutableStateOf(false) }
+        Card(
+            modifier.fillMaxWidth().heightIn(max = 330.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = PosWalnut)
+        ) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Bill · $itemCount items", color = PosIvory, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    TextButton(onClick = { showCustomerDetails = !showCustomerDetails }, enabled = !saving, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
+                        Text(if (showCustomerDetails) "Hide customer" else if (customerPhone.isBlank()) "Add customer" else "Customer ✓", color = PosMustard)
                     }
                 }
-            } else {
-                LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(cart, key = { it.first.id }) { (item, qty) ->
-                        Row(Modifier.fillMaxWidth().background(Color(0xFF503625), RoundedCornerShape(10.dp)).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(item.name, color = PosIvory, fontWeight = FontWeight.SemiBold, maxLines = 2)
-                                Text("₹${"%.2f".format(item.pricePaise / 100.0)} × $qty", color = Color(0xFFD8C5A8), style = MaterialTheme.typography.labelSmall)
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (cart.isEmpty()) {
+                    Text("Select items from the menu", color = Color(0xFFD8C5A8), style = MaterialTheme.typography.bodySmall)
+                } else {
+                    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 92.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        items(cart, key = { it.first.id }) { (item, qty) ->
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(item.name, color = PosIvory, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                    Text("₹%.2f × $qty".format(item.pricePaise / 100.0), color = Color(0xFFD8C5A8), style = MaterialTheme.typography.labelSmall)
+                                }
                                 TextButton(onClick = { onDecrease(item.id, item, qty) }, enabled = !saving, contentPadding = PaddingValues(horizontal = 5.dp)) { Text("−", color = PosIvory) }
-                                Text(qty.toString(), color = PosIvory, fontWeight = FontWeight.Bold)
+                                Text("$qty", color = PosIvory, fontWeight = FontWeight.Bold)
                                 TextButton(onClick = { onIncrease(item.id, item, qty) }, enabled = !saving, contentPadding = PaddingValues(horizontal = 5.dp)) { Text("+", color = PosMustard) }
-                                TextButton(onClick = { onRemove(item.id) }, enabled = !saving, contentPadding = PaddingValues(horizontal = 3.dp)) { Text("×", color = Color(0xFFFFB59A)) }
+                                TextButton(onClick = { onRemove(item.id) }, enabled = !saving, contentPadding = PaddingValues(horizontal = 4.dp)) { Text("×", color = Color(0xFFFFB59A)) }
                             }
                         }
                     }
                 }
-            }
-            if (customerPhone.isNotBlank() || loyaltyRewards > 0) {
-                Text("Customer loyalty", color = PosMustard, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
-            }
-            OutlinedTextField(
-                value = customerPhone,
-                onValueChange = onCustomerPhone,
-                enabled = !saving,
-                label = { Text("Customer mobile (optional)") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = PosIvory, unfocusedTextColor = PosIvory,
-                    focusedBorderColor = PosMustard, unfocusedBorderColor = Color(0xFF98785B),
-                    focusedLabelColor = PosMustard, unfocusedLabelColor = Color(0xFFD8C5A8),
-                    cursorColor = PosMustard
-                )
-            )
-            if (loyaltyRewards > 0 && coffeeItem != null && customerPhone.length == 10) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = redeemFreeCoffee, onCheckedChange = onRedeem, enabled = !saving, colors = CheckboxDefaults.colors(checkedColor = PosMustard, checkmarkColor = PosWalnut))
-                    Text("Add 1 free coffee reward · $loyaltyRewards available", color = PosIvory, style = MaterialTheme.typography.bodySmall)
+                if (showCustomerDetails) {
+                    OutlinedTextField(
+                        value = customerPhone, onValueChange = onCustomerPhone, enabled = !saving,
+                        label = { Text("Customer mobile (optional)") }, modifier = Modifier.fillMaxWidth(),
+                        singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = PosIvory, unfocusedTextColor = PosIvory,
+                            focusedBorderColor = PosMustard, unfocusedBorderColor = Color(0xFF98785B),
+                            focusedLabelColor = PosMustard, unfocusedLabelColor = Color(0xFFD8C5A8), cursorColor = PosMustard
+                        )
+                    )
+                    if (loyaltyRewards > 0 && coffeeItem != null && customerPhone.length == 10) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = redeemFreeCoffee, onCheckedChange = onRedeem, enabled = !saving,
+                                colors = CheckboxDefaults.colors(checkedColor = PosMustard, checkmarkColor = PosWalnut))
+                            Text("Redeem 1 free coffee · $loyaltyRewards available", color = PosIvory, style = MaterialTheme.typography.bodySmall)
+                        }
+                    } else if (customerPhone.length == 10) {
+                        Text("Buy 10 paid coffees · earn 1 free", color = Color(0xFFD8C5A8), style = MaterialTheme.typography.labelSmall)
+                    }
                 }
-            } else if (customerPhone.length == 10) {
-                Text("Buy 10 paid coffees · earn 1 free", color = Color(0xFFD8C5A8), style = MaterialTheme.typography.labelSmall)
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Payment", color = PosIvory, fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(selected = payment == "CASH", onClick = { onPayment("CASH") }, enabled = !saving, label = { Text("Cash") })
-                    FilterChip(selected = payment == "UPI", onClick = { onPayment("UPI") }, enabled = !saving, label = { Text("UPI") })
-                    FilterChip(selected = payment == "SPLIT", onClick = { onPayment("SPLIT") }, enabled = !saving, label = { Text("Split") })
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Payment", color = PosIvory, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FilterChip(selected = payment == "CASH", onClick = { onPayment("CASH") }, enabled = !saving, label = { Text("Cash") })
+                        FilterChip(selected = payment == "UPI", onClick = { onPayment("UPI") }, enabled = !saving, label = { Text("UPI") })
+                        FilterChip(selected = payment == "SPLIT", onClick = { onPayment("SPLIT") }, enabled = !saving, label = { Text("Split") })
+                    }
                 }
+                if (payment == "SPLIT") {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(value = cashPartInput, onValueChange = onCashPartInput, enabled = !saving,
+                            label = { Text("Cash ₹") }, modifier = Modifier.weight(1f), singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = PosIvory, unfocusedTextColor = PosIvory,
+                                focusedBorderColor = PosMustard, unfocusedBorderColor = Color(0xFF98785B),
+                                focusedLabelColor = PosMustard, unfocusedLabelColor = Color(0xFFD8C5A8)))
+                        Text("UPI ₹%.2f".format(upiRemainder / 100.0), color = PosMustard, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                if ((payment == "CASH" || payment == "SPLIT") && !activeShift) {
+                    Text("Open a cash shift before accepting cash payments.", color = Color(0xFFFFC28D), style = MaterialTheme.typography.labelSmall)
+                }
+                if (missingRecipes.isNotEmpty()) {
+                    Text("Recipe required: " + missingRecipes.joinToString { it.name }, color = Color(0xFFFFC28D), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                }
+                HorizontalDivider(color = Color(0xFF76553A))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("TOTAL", color = PosIvory, fontWeight = FontWeight.Bold)
+                    Text("₹%.2f".format(total / 100.0), color = PosMustard, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedButton(onClick = onClear, enabled = cart.isNotEmpty() && !saving, modifier = Modifier.weight(0.8f),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = PosIvory)) { Text("Clear") }
+                    OutlinedButton(onClick = onHold, enabled = cart.isNotEmpty() && !saving, modifier = Modifier.weight(0.9f),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = PosMustard)) { Text("Hold") }
+                    Button(onClick = onCheckout, enabled = canCheckout, modifier = Modifier.weight(1.5f),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PosOrange, contentColor = Color.White)) {
+                        Text(if (saving) "Saving…" else "Complete sale", maxLines = 1)
+                    }
+                }
+                if (message.isNotBlank()) Text(message, color = if (message.contains("success", true) || message.contains("added", true)) PosMustard else Color(0xFFFFC28D), style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
-            if (payment == "SPLIT") {
+        }
+    } else {
+        Card(
+            modifier,
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = PosWalnut)
+        ) {
+            Column(Modifier.fillMaxSize().padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column {
+                        Text("Bill / Order", color = PosIvory, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text("Current counter order", color = Color(0xFFD8C5A8), style = MaterialTheme.typography.labelSmall)
+                    }
+                    Text("$itemCount items", color = PosWalnut, modifier = Modifier.background(PosMustard, RoundedCornerShape(20.dp)).padding(horizontal = 10.dp, vertical = 6.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                }
+                if (cart.isEmpty()) {
+                    Box(Modifier.weight(1f).fillMaxWidth().background(Color(0xFF503625), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("🧾", style = MaterialTheme.typography.headlineLarge)
+                            Text("Select items from the menu", color = PosIvory, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                } else {
+                    LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(cart, key = { it.first.id }) { (item, qty) ->
+                            Row(Modifier.fillMaxWidth().background(Color(0xFF503625), RoundedCornerShape(10.dp)).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(item.name, color = PosIvory, fontWeight = FontWeight.SemiBold, maxLines = 2)
+                                    Text("₹%.2f × $qty".format(item.pricePaise / 100.0), color = Color(0xFFD8C5A8), style = MaterialTheme.typography.labelSmall)
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    TextButton(onClick = { onDecrease(item.id, item, qty) }, enabled = !saving, contentPadding = PaddingValues(horizontal = 5.dp)) { Text("−", color = PosIvory) }
+                                    Text(qty.toString(), color = PosIvory, fontWeight = FontWeight.Bold)
+                                    TextButton(onClick = { onIncrease(item.id, item, qty) }, enabled = !saving, contentPadding = PaddingValues(horizontal = 5.dp)) { Text("+", color = PosMustard) }
+                                    TextButton(onClick = { onRemove(item.id) }, enabled = !saving, contentPadding = PaddingValues(horizontal = 3.dp)) { Text("×", color = Color(0xFFFFB59A)) }
+                                }
+                            }
+                        }
+                    }
+                }
+                if (customerPhone.isNotBlank() || loyaltyRewards > 0) Text("Customer loyalty", color = PosMustard, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
                 OutlinedTextField(
-                    value = cashPartInput,
-                    onValueChange = onCashPartInput,
-                    enabled = !saving,
-                    label = { Text("Cash portion ₹") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = PosIvory, unfocusedTextColor = PosIvory, focusedBorderColor = PosMustard, unfocusedBorderColor = Color(0xFF98785B), focusedLabelColor = PosMustard, unfocusedLabelColor = Color(0xFFD8C5A8))
+                    value = customerPhone, onValueChange = onCustomerPhone, enabled = !saving,
+                    label = { Text("Customer mobile (optional)") }, modifier = Modifier.fillMaxWidth(),
+                    singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = PosIvory, unfocusedTextColor = PosIvory,
+                        focusedBorderColor = PosMustard, unfocusedBorderColor = Color(0xFF98785B),
+                        focusedLabelColor = PosMustard, unfocusedLabelColor = Color(0xFFD8C5A8), cursorColor = PosMustard)
                 )
-                Text("UPI balance: ₹%.2f".format(upiRemainder / 100.0), color = PosMustard, style = MaterialTheme.typography.labelSmall)
-            }
-            if ((payment == "CASH" || payment == "SPLIT") && !activeShift) {
-                Text("Open a cash shift before accepting cash payments.", color = Color(0xFFFFC28D), style = MaterialTheme.typography.labelSmall)
-            }
-            if (missingRecipes.isNotEmpty()) {
-                Text("Recipe required: " + missingRecipes.joinToString { it.name }, color = Color(0xFFFFC28D), style = MaterialTheme.typography.labelSmall)
-            }
-            HorizontalDivider(color = Color(0xFF76553A))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("TOTAL", color = PosIvory, fontWeight = FontWeight.Bold)
-                Text("₹${"%.2f".format(total / 100.0)}", color = PosMustard, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onClear, enabled = cart.isNotEmpty() && !saving, modifier = Modifier.weight(0.8f), colors = ButtonDefaults.outlinedButtonColors(contentColor = PosIvory)) { Text("Clear") }
-                OutlinedButton(onClick = onHold, enabled = cart.isNotEmpty() && !saving, modifier = Modifier.weight(0.9f), colors = ButtonDefaults.outlinedButtonColors(contentColor = PosMustard)) { Text("Hold") }
-                Button(onClick = onCheckout, enabled = canCheckout, modifier = Modifier.weight(1.5f), colors = ButtonDefaults.buttonColors(containerColor = PosOrange, contentColor = Color.White)) {
-                    Text(if (saving) "Saving…" else "Complete sale")
+                if (loyaltyRewards > 0 && coffeeItem != null && customerPhone.length == 10) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = redeemFreeCoffee, onCheckedChange = onRedeem, enabled = !saving, colors = CheckboxDefaults.colors(checkedColor = PosMustard, checkmarkColor = PosWalnut))
+                        Text("Add 1 free coffee reward · $loyaltyRewards available", color = PosIvory, style = MaterialTheme.typography.bodySmall)
+                    }
+                } else if (customerPhone.length == 10) Text("Buy 10 paid coffees · earn 1 free", color = Color(0xFFD8C5A8), style = MaterialTheme.typography.labelSmall)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Payment", color = PosIvory, fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(selected = payment == "CASH", onClick = { onPayment("CASH") }, enabled = !saving, label = { Text("Cash") })
+                        FilterChip(selected = payment == "UPI", onClick = { onPayment("UPI") }, enabled = !saving, label = { Text("UPI") })
+                        FilterChip(selected = payment == "SPLIT", onClick = { onPayment("SPLIT") }, enabled = !saving, label = { Text("Split") })
+                    }
                 }
+                if (payment == "SPLIT") {
+                    OutlinedTextField(value = cashPartInput, onValueChange = onCashPartInput, enabled = !saving,
+                        label = { Text("Cash portion ₹") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = PosIvory, unfocusedTextColor = PosIvory,
+                            focusedBorderColor = PosMustard, unfocusedBorderColor = Color(0xFF98785B),
+                            focusedLabelColor = PosMustard, unfocusedLabelColor = Color(0xFFD8C5A8)))
+                    Text("UPI balance: ₹%.2f".format(upiRemainder / 100.0), color = PosMustard, style = MaterialTheme.typography.labelSmall)
+                }
+                if ((payment == "CASH" || payment == "SPLIT") && !activeShift) Text("Open a cash shift before accepting cash payments.", color = Color(0xFFFFC28D), style = MaterialTheme.typography.labelSmall)
+                if (missingRecipes.isNotEmpty()) Text("Recipe required: " + missingRecipes.joinToString { it.name }, color = Color(0xFFFFC28D), style = MaterialTheme.typography.labelSmall)
+                HorizontalDivider(color = Color(0xFF76553A))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("TOTAL", color = PosIvory, fontWeight = FontWeight.Bold)
+                    Text("₹%.2f".format(total / 100.0), color = PosMustard, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onClear, enabled = cart.isNotEmpty() && !saving, modifier = Modifier.weight(0.8f), colors = ButtonDefaults.outlinedButtonColors(contentColor = PosIvory)) { Text("Clear") }
+                    OutlinedButton(onClick = onHold, enabled = cart.isNotEmpty() && !saving, modifier = Modifier.weight(0.9f), colors = ButtonDefaults.outlinedButtonColors(contentColor = PosMustard)) { Text("Hold") }
+                    Button(onClick = onCheckout, enabled = canCheckout, modifier = Modifier.weight(1.5f), colors = ButtonDefaults.buttonColors(containerColor = PosOrange, contentColor = Color.White)) { Text(if (saving) "Saving…" else "Complete sale") }
+                }
+                if (message.isNotBlank()) Text(message, color = if (message.contains("success", true) || message.contains("added", true)) PosMustard else Color(0xFFFFC28D), style = MaterialTheme.typography.labelSmall, maxLines = 2)
+                Text("$salesCount saved bills on this device", color = Color(0xFFD8C5A8), style = MaterialTheme.typography.labelSmall)
             }
-            if (message.isNotBlank()) Text(message, color = if (message.contains("success", true) || message.contains("added", true)) PosMustard else Color(0xFFFFC28D), style = MaterialTheme.typography.labelSmall, maxLines = 2)
-            Text("$salesCount saved bills on this device", color = Color(0xFFD8C5A8), style = MaterialTheme.typography.labelSmall)
         }
     }
 }
