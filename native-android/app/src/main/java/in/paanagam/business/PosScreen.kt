@@ -86,11 +86,16 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
     val upiPartPaise = total - cashPartPaise
     val itemCount = cartItems.sumOf { it.second }
     val coffeeItem = cartItems.firstOrNull { it.first.isCoffee }?.first
-    val missingRecipes = cartItems.map { it.first }.filter { item ->
-        val components = comboComponents.filter { it.comboItemId == item.id }
-        if (components.isEmpty()) recipeLines.none { it.menuItemId == item.id }
-        else components.any { part -> recipeLines.none { it.menuItemId == part.componentItemId } }
+    fun hasMissingRecipe(menuItemId: String, path: Set<String> = emptySet()): Boolean {
+        if (menuItemId in path) return true
+        val nextPath = path + menuItemId
+        val components = comboComponents.filter { it.comboItemId == menuItemId }
+        if (components.isEmpty()) return recipeLines.none { it.menuItemId == menuItemId }
+        return components.any { part ->
+            part.quantity <= 0 || hasMissingRecipe(part.componentItemId, nextPath)
+        }
     }
+    val missingRecipes = cartItems.map { it.first }.filter { hasMissingRecipe(it.id) }
     fun recordPreCheckoutAudit(eventType: String, reason: String, amountPaise: Long, onSaved: () -> Unit) {
         scope.launch {
             runCatching {
