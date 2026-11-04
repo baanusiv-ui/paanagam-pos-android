@@ -17,7 +17,7 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.UUID
 
-private data class PlanStockLine(val name: String, val required: Long, val available: Long, val unit: String)
+private data class PlanStockLine(val ingredientId: String, val name: String, val required: Long, val available: Long, val unit: String)
 
 @Composable
 fun NextDayPlanningScreen(db: PaanagamDatabase) {
@@ -69,7 +69,7 @@ fun NextDayPlanningScreen(db: PaanagamDatabase) {
             }
             stockLines = totals.mapNotNull { (ingredientId, required) ->
                 val item = ingredients.firstOrNull { it.id == ingredientId } ?: error("A planned recipe references a missing ingredient.")
-                PlanStockLine(item.name, required, db.dao().stockBalance(item.id, "KITCHEN"), item.baseUnit)
+                PlanStockLine(item.id, item.name, required, db.dao().stockBalance(item.id, "KITCHEN"), item.baseUnit)
             }.sortedBy { it.name }
         } catch (error: Exception) {
             stockLines = emptyList()
@@ -150,7 +150,7 @@ fun NextDayPlanningScreen(db: PaanagamDatabase) {
         }
         if (stockLines.isEmpty()) Text("Recipe-linked ingredient needs will appear here after adding plan items. Any missing recipe or circular combo is shown above.", color = muted, style = MaterialTheme.typography.bodySmall)
         else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            items(stockLines, key = { it.name }) { line ->
+            items(stockLines, key = { it.ingredientId }) { line ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f)) {
                         Text(line.name, color = ink)
