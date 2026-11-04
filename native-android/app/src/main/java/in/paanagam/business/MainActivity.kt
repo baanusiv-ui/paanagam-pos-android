@@ -326,8 +326,6 @@ class MainActivity : ComponentActivity() {
         val migrationRecoveryFile = getDatabasePath("paanagam-local.db.plaintext-recovery")
         try {
             db.openHelper.writableDatabase
-            if (recoveryFile.exists()) check(recoveryFile.delete()) { "Could not remove the previous restore recovery file." }
-            if (migrationRecoveryFile.exists()) check(migrationRecoveryFile.delete()) { "Database opened, but the plaintext migration recovery file could not be removed. Retry app startup before using POS." }
         } catch (failure: Throwable) {
             db.close()
             if (recoveryFile.exists()) {
@@ -342,6 +340,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
             throw failure
+        }
+
+        // Cleanup happens only after Room has opened successfully. A cleanup
+        // failure must never enter the database-open recovery handler and roll
+        // back a valid, already-opened database to an older plaintext copy.
+        if (recoveryFile.exists()) check(recoveryFile.delete()) {
+            "Database opened, but the previous restore recovery file could not be removed. Retry startup before using POS."
+        }
+        if (migrationRecoveryFile.exists()) check(migrationRecoveryFile.delete()) {
+            "Database opened, but the plaintext migration recovery file could not be removed. Retry startup before using POS."
         }
         setContent { PaanagamApp(db, androidId, databaseKey) { recreate() } }
     }
