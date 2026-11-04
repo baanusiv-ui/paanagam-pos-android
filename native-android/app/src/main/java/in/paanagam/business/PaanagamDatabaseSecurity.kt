@@ -38,11 +38,16 @@ internal object PaanagamDatabaseSecurity {
         System.loadLibrary("sqlcipher")
         val live = context.getDatabasePath(DATABASE_NAME)
         val recovery = File(live.path + RECOVERY_SUFFIX)
+        val restoreRecovery = File(live.parentFile ?: context.filesDir, "paanagam-before-restore.db")
         val temp = File(live.path + TEMP_SUFFIX)
+        val invalidLive = File(live.path + ".invalid-before-restore")
         live.parentFile?.mkdirs()
 
-        if (!live.exists() && recovery.exists()) {
-            check(recovery.renameTo(live)) { "Could not recover the original Paanagam database." }
+        // Recover a pre-restore database before Room is constructed. This must
+        // happen here as well as in MainActivity: prepare() runs before its
+        // Room-open recovery handler and can itself reject a damaged live file.
+        if (!live.exists() && restoreRecovery.exists()) {
+            check(restoreRecovery.renameTo(live)) { "Could not recover the pre-restore Paanagam database." }
         }
 
         val wrappedExists = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -77,13 +82,34 @@ internal object PaanagamDatabaseSecurity {
                 verifyEncryptedDatabase(live, key, checkIntegrity = false)
                 // Preserve recovery until MainActivity confirms Room can open.
             } catch (failure: Throwable) {
+                if (restoreRecovery.exists()) {
+                    // Keep the failed new database aside until the previous
+                    // known-good database has been restored and validated.
+                    if (invalidLive.exists()) check(invalidLive.delete()) { "Could not clear the invalid database staging file." }
+                    check(live.renameTo(invalidLive)) { "Could not preserve the invalid restored database for diagnosis." }
+                    if (!restoreRecovery.renameTo(live)) {
+                        invalidLive.renameTo(live)
+                        error("Encrypted restore validation failed and the previous database could not be recovered.")
+                    }
+                    try {
+                        verifyEncryptedDatabase(live, key, checkIntegrity = false)
+                    } catch (recoveryFailure: Throwable) {
+                        live.renameTo(restoreRecovery)
+                        invalidLive.renameTo(live)
+                        throw recoveryFailure
+                    }
+                    temp.delete()
+                    return key
+                }
                 if (recovery.exists()) {
                     live.delete()
-                    check(recovery.renameTo(live)) { "Encrypted database validation failed and recovery could not be restored." }
+                    check(recovery.renameTo(live)) { "Encrypted database validation failed and migration recovery could not be restored." }
                     temp.delete()
                     return prepare(context)
                 }
                 throw failure
+            } finally {
+                if (invalidLive.exists() && live.exists()) invalidLive.delete()
             }
         }
 
