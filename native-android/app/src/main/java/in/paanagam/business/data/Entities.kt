@@ -178,3 +178,17 @@ data class CctvAuditEvent(
     val cameraBookmarkStatus: String = "LOCAL_BOOKMARK",
     val clipReference: String = ""
 )
+
+
+@Entity(tableName = "loyalty_ledger", indices = [Index(value = ["phone", "createdAt"]), Index(value = ["saleId"]), Index(value = ["reversesEntryId"], unique = true)])
+data class LoyaltyLedgerEntry(
+    @PrimaryKey val id: String,
+    val phone: String,
+    val saleId: String,
+    val entryType: String,
+    val coffeeDelta: Int,
+    val rewardDelta: Int,
+    val lifetimeDelta: Int,
+    val createdAt: Long,
+    val reversesEntryId: String? = null
+)
