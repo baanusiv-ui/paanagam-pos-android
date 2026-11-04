@@ -698,7 +698,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
     suspend fun insertStockTransfer(item: StockTransfer)
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertStockMovement(item: StockMovement)
-    @Query("SELECT * FROM stock_lots WHERE ingredientId = :ingredientId AND location = :location AND remainingBaseUnits > 0 ORDER BY receivedAt ASC")
+    @Query("SELECT * FROM stock_lots WHERE ingredientId = :ingredientId AND location = :location AND remainingBaseUnits > 0 ORDER BY receivedAt ASC, id ASC")
     suspend fun fifoLots(ingredientId: String, location: String): List<StockLot>
     @Query("UPDATE stock_lots SET remainingBaseUnits = :remaining WHERE id = :lotId")
     suspend fun updateLotBalance(lotId: String, remaining: Long)
@@ -740,10 +740,14 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         insertProductionBatch(batch)
         insertProductionInput(ProductionInput(UUID.randomUUID().toString(), batch.id, powderId, 250000L, powderCost))
         insertProductionInput(ProductionInput(UUID.randomUUID().toString(), batch.id, waterId, 1100000L, waterCost))
-        val perMlCost = totalCost / 1000L
-        val lot = StockLot(UUID.randomUUID().toString(), decoctionId, "KITCHEN", batch.producedAt, 1000000L, 1000000L, "ml", perMlCost)
-        insertStockLot(lot)
-        insertStockMovement(StockMovement(UUID.randomUUID().toString(), decoctionId, lot.id, "PRODUCTION_OUTPUT", "", "KITCHEN", 1000000L, perMlCost, batch.id, batch.producedAt))
+        val segments = allocateFifoLotSegments(1000000L, totalCost)
+        segments.forEachIndexed { index, (quantity, ratePerThousand) ->
+            // Stable suffix keeps same-time cost segments in deterministic FIFO order.
+            val lotId = "${batch.id}:decoction:$index"
+            val lot = StockLot(lotId, decoctionId, "KITCHEN", batch.producedAt, quantity, quantity, "ml", ratePerThousand)
+            insertStockLot(lot)
+            insertStockMovement(StockMovement(UUID.randomUUID().toString(), decoctionId, lot.id, "PRODUCTION_OUTPUT", "", "KITCHEN", quantity, ratePerThousand, batch.id, batch.producedAt))
+        }
     }
 
     @Transaction
