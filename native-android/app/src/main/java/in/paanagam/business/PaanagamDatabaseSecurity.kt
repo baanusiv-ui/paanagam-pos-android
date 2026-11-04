@@ -50,6 +50,21 @@ internal object PaanagamDatabaseSecurity {
             restoreRecovery.copyTo(live, overwrite = true)
         }
 
+        // A process kill can bypass DatabaseBackupScreen's finally block.
+        // Remove only app-generated staging files left by interrupted backup
+        // or restore operations before opening the live database.
+        live.parentFile?.listFiles()?.filter {
+            it.isFile && it.name.startsWith("paanagam-restore-") &&
+                (it.name.endsWith(".plain") || it.name.endsWith(".enc"))
+        }?.forEach { stale ->
+            check(stale.delete()) { "Could not remove an interrupted restore staging file: ${stale.name}" }
+        }
+        context.cacheDir.listFiles()?.filter {
+            it.isFile && it.name.startsWith("paanagam-portable-") && it.name.endsWith(".db")
+        }?.forEach { stale ->
+            check(stale.delete()) { "Could not remove an interrupted backup staging file: ${stale.name}" }
+        }
+
         val wrappedExists = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .contains(WRAPPED_KEY)
 
