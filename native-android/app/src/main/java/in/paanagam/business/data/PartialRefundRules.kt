@@ -29,7 +29,7 @@ internal object PartialRefundRules {
         require(originalTotalPaise > 0L)
         require(originalCashPaise >= 0L && originalUpiPaise >= 0L)
         require(Math.addExact(originalCashPaise, originalUpiPaise) == originalTotalPaise)
-        require(previouslyRefundedPaise >= 0L && thisRefundPaise > 0L)
+        require(previouslyRefundedPaise >= 0L && thisRefundPaise >= 0L)
         require(previouslyRefundedCashPaise >= 0L && previouslyRefundedUpiPaise >= 0L)
         require(Math.addExact(previouslyRefundedCashPaise, previouslyRefundedUpiPaise) == previouslyRefundedPaise)
         val cumulative = Math.addExact(previouslyRefundedPaise, thisRefundPaise)
