@@ -357,6 +357,27 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
                 originals.forEach { entry ->
                     insertLoyaltyLedgerEntry(LoyaltyLedgerEntry(UUID.randomUUID().toString(), phone, historicalSale.id, "REVERSAL", -entry.coffeeDelta, -entry.rewardDelta, -entry.lifetimeDelta, refundAt, entry.id))
                 }
+            } else if (historicalSale.status == "PARTIALLY_REFUNDED") {
+                // Reconstruct legacy partial refunds as a single auditable delta.
+                // Fully refunded sales are handled above to avoid double reversal.
+                val lineById = saleLinesForHistory.associateBy { it.id }
+                val refundedRows = saleLineRefunds(historicalSale.id)
+                var paidCoffeeRefunded = 0
+                var freeCoffeeRefunded = 0
+                refundedRows.forEach { refund ->
+                    val line = lineById[refund.saleLineId] ?: return@forEach
+                    if (catalogItem(line.itemId)?.isCoffee == true) {
+                        if (line.unitPricePaise > 0L) paidCoffeeRefunded = Math.addExact(paidCoffeeRefunded, refund.refundedQuantity)
+                        else freeCoffeeRefunded = Math.addExact(freeCoffeeRefunded, refund.refundedQuantity)
+                    }
+                }
+                if (paidCoffeeRefunded > 0 || freeCoffeeRefunded > 0) {
+                    val refundAt = refundedRows.maxOfOrNull { it.refundedAt } ?: historicalSale.createdAt
+                    insertLoyaltyLedgerEntry(LoyaltyLedgerEntry(
+                        UUID.randomUUID().toString(), phone, historicalSale.id, "PARTIAL_REFUND",
+                        -paidCoffeeRefunded, freeCoffeeRefunded, -paidCoffeeRefunded, refundAt
+                    ))
+                }
             }
         }
         if (reconstructedEntries == 0) {
@@ -453,6 +474,52 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         updateKitchenTicketStatus(saleId, "CANCELLED", refundedAt)
         insertCctvAuditEvent(CctvAuditEvent(UUID.randomUUID().toString(), saleId, "SALE_REFUND", reason.trim(), sale.totalPaise, cashierId, cashierName, refundedAt, "LOCAL_BOOKMARK"))
     }
+    /**
+     * Refunds only the still-unrefunded units on a bill. Every unit goes through the
+     * same FIFO trace, tender allocation, loyalty reversal, wastage and CCTV audit
+     * path as an ordinary item refund. The outer transaction makes the operation
+     * all-or-nothing if any legacy line lacks unit traceability or cash shift.
+     */
+    @Transaction
+    suspend fun refundRemainingSaleBalance(
+        saleId: String,
+        reason: String,
+        refundedAt: Long,
+        cashierId: String,
+        cashierName: String
+    ) {
+        require(reason.isNotBlank()) { "Enter a food refund reason." }
+        val sale = saleById(saleId) ?: error("Sale not found.")
+        require(sale.status == "COMPLETED" || sale.status == "PARTIALLY_REFUNDED") {
+            "Only completed or partially refunded sales can receive a remaining-balance refund."
+        }
+        val lines = saleLines(saleId)
+        require(lines.isNotEmpty()) { "No bill lines found." }
+        val priorRows = saleRefunds(saleId)
+        val priorAmount = priorRows.fold(0L) { total, row -> Math.addExact(total, row.amountPaise) }
+        require(priorAmount < sale.totalPaise) { "This bill has no remaining refundable balance." }
+        val alreadyRefunded = saleLineRefunds(saleId).groupBy { it.saleLineId }
+        lines.forEach { line ->
+            val refundedQuantity = alreadyRefunded[line.id].orEmpty().sumOf { it.refundedQuantity }
+            val remainingQuantity = line.quantity - refundedQuantity
+            if (remainingQuantity > 0) {
+                refundSaleLineQuantity(
+                    saleId = saleId,
+                    saleLineId = line.id,
+                    requestedQuantity = remainingQuantity,
+                    reason = reason.trim(),
+                    refundedAt = refundedAt,
+                    cashierId = cashierId,
+                    cashierName = cashierName
+                )
+            }
+        }
+        val finalSale = saleById(saleId) ?: error("Sale not found after refund.")
+        require(finalSale.status == "REFUNDED") {
+            "The bill still has refundable units. Check its item-level refund history."
+        }
+    }
+
     @Transaction
     suspend fun refundSaleLineQuantity(
         saleId: String,
