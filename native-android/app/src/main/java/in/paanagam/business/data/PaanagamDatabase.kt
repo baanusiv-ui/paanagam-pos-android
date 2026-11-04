@@ -273,7 +273,7 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
             "SPLIT" -> sale.upiPaidPaise
             else -> 0L
         }
-        require(cashPortion >= 0 && upiPortion >= 0 && cashPortion + upiPortion == sale.totalPaise) { "Cash and UPI amounts must equal the bill total." }
+        require(cashPortion >= 0 && upiPortion >= 0 && Math.addExact(cashPortion, upiPortion) == sale.totalPaise) { "Cash and UPI amounts must equal the bill total." }
         val activeShift = getOpenCashShift()
         require(cashPortion == 0L || activeShift != null) { "Open a cash shift before accepting cash payments." }
         val saleWithShift = sale.copy(shiftId = if (cashPortion > 0) activeShift?.id else null, cashPaidPaise = cashPortion, upiPaidPaise = upiPortion)
