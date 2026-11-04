@@ -13,6 +13,8 @@ import androidx.compose.ui.unit.dp
 import `in`.paanagam.business.data.*
 import kotlinx.coroutines.launch
 import java.util.UUID
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 @Composable
 fun RecipeScreen(db: PaanagamDatabase) {
@@ -82,14 +84,26 @@ fun RecipeScreen(db: PaanagamDatabase) {
                 singleLine = true, modifier = Modifier.fillMaxWidth()
             )
             Button(onClick = {
-                val amount = quantity.toDoubleOrNull()
-                if (selectedMenu == null || selectedIngredient == null || amount == null || amount <= 0.0) {
-                    message = "Select a menu item and ingredient, then enter a quantity greater than zero"
+                val amount = quantity.trim().toBigDecimalOrNull()
+                val baseUnits = runCatching {
+                    requireNotNull(amount).multiply(BigDecimal("1000"))
+                        .setScale(0, RoundingMode.UNNECESSARY).longValueExact()
+                }.getOrNull()
+                if (selectedMenu == null || selectedIngredient == null || amount == null || amount.signum() <= 0 || baseUnits == null || baseUnits <= 0L) {
+                    message = "Enter a positive quantity with at most three decimal places."
                 } else {
                     scope.launch {
-                        db.dao().saveRecipeLine(RecipeLine(UUID.randomUUID().toString(), selectedMenu.id, selectedIngredient.id, (amount * 1000.0).toLong()))
-                        quantity = ""
-                        message = "Recipe ingredient saved"
+                        runCatching {
+                            require(db.dao().recipeLines(selectedMenu.id).none { it.ingredientId == selectedIngredient.id }) {
+                                "This ingredient is already in the recipe. Remove its existing line before adding it again."
+                            }
+                            db.dao().saveRecipeLine(RecipeLine(UUID.randomUUID().toString(), selectedMenu.id, selectedIngredient.id, baseUnits))
+                        }.onSuccess {
+                            quantity = ""
+                            message = "Recipe ingredient saved"
+                        }.onFailure {
+                            message = it.message ?: "Could not save recipe ingredient."
+                        }
                     }
                 }
             }) { Text("Add ingredient to recipe") }
