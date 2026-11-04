@@ -307,13 +307,22 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
             }
             for (unitIndex in 0 until line.quantity) {
                 perUnitRequirements.forEach { (ingredientId, requiredPerUnit) ->
-                    totalIngredientCost = Math.addExact(totalIngredientCost, consumeFifo(
+                    consumeFifo(
                         ingredientId, "KITCHEN", requiredPerUnit, sale.id, "SALE_CONSUMPTION",
                         sale.createdAt, line.id, unitIndex
-                    ))
+                    )
                 }
             }
         }
+        // Aggregate cost at the same sale-line/ingredient boundary as the original
+        // FIFO costing rule, avoiding a per-unit rounding loss when splitting lots.
+        val consumedMovements = saleConsumptionMovements(sale.id)
+        totalIngredientCost = consumedMovements
+            .groupBy { it.saleLineId to it.ingredientId }
+            .values
+            .fold(0L) { total, movements ->
+                Math.addExact(total, calculateFifoCostPaise(movements.map { it.quantityBaseUnits to it.unitCostPaise }))
+            }
         recordSale(saleWithShift)
         recordSaleLines(lines)
         insertKitchenTicket(KitchenTicket(sale.id, "NEW", sale.createdAt, sale.createdAt))
@@ -415,15 +424,21 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         }
         val movements = saleConsumptionMovements(saleId)
         require(movements.isNotEmpty()) { "No original stock consumption was found. Refund blocked to avoid an incomplete stock reversal." }
-        movements.forEach { movement ->
-            val lot = stockLot(movement.lotId) ?: error("Original FIFO lot is missing. Refund blocked.")
-            require(lot.ingredientId == movement.ingredientId && lot.location == movement.fromLocation && movement.quantityBaseUnits > 0)
-            // Food returned after a refund is never put back into usable stock.
-            // The original sale already consumed these recipe ingredients, so this
-            // wastage entry is an audit/cost record only: do not alter lot balances
-            // or create another stock movement.
-            val cost = calculateFifoCostPaise(listOf(movement.quantityBaseUnits to movement.unitCostPaise))
-            insertWastage(WastageRecord(UUID.randomUUID().toString(), movement.ingredientId, lot.location, movement.quantityBaseUnits, "FOOD REFUND • Sale " + saleId + ": " + reason.trim(), refundedAt, cost))
+        // Aggregate returned recipe quantities by ingredient. The original sale
+        // already consumed these ingredients; this is a cost/audit entry only.
+        movements.groupBy { it.ingredientId }.forEach { (ingredientId, ingredientMovements) ->
+            val lots = ingredientMovements.map { movement ->
+                val lot = stockLot(movement.lotId) ?: error("Original FIFO lot is missing. Refund blocked.")
+                require(lot.ingredientId == movement.ingredientId && lot.location == movement.fromLocation && movement.quantityBaseUnits > 0)
+                lot
+            }
+            require(lots.map { it.location }.distinct().size == 1)
+            val quantity = ingredientMovements.fold(0L) { total, movement -> Math.addExact(total, movement.quantityBaseUnits) }
+            val cost = calculateFifoCostPaise(ingredientMovements.map { it.quantityBaseUnits to it.unitCostPaise })
+            insertWastage(WastageRecord(
+                UUID.randomUUID().toString(), ingredientId, lots.first().location, quantity,
+                "FOOD REFUND • Sale $saleId: ${reason.trim()}", refundedAt, cost
+            ))
         }
         if (cashRefundPaise > 0) {
             val shift = getOpenCashShift() ?: error("Open a cash shift before issuing a cash refund.")
@@ -451,11 +466,14 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
             "Only completed or partially refunded sales can receive another item refund."
         }
         val line = saleLines(saleId).firstOrNull { it.id == saleLineId } ?: error("Sale line does not belong to this bill.")
+        val allSaleMovements = saleConsumptionMovements(saleId)
+        val allLineMovements = allSaleMovements.filter { it.saleLineId == line.id }
+        require(allLineMovements.isNotEmpty() && allLineMovements.all { it.saleUnitIndex in 0 until line.quantity }) {
+            "This bill predates per-unit FIFO traceability. Item refunds are blocked rather than guessing ingredient quantities."
+        }
         val previousLineRefunds = saleLineRefunds(saleId).filter { it.saleLineId == saleLineId }
         val alreadyRefundedIndexes = previousLineRefunds.map { it.saleUnitIndex }.toSet()
-        require(alreadyRefundedIndexes.none { it < 0 }) {
-            "This bill has legacy refund records without unit traceability. Use the full-bill refund workflow."
-        }
+        require(alreadyRefundedIndexes.none { it < 0 }) { "Legacy refund records do not contain unit traceability." }
         val availableIndexes = (0 until line.quantity).filterNot { it in alreadyRefundedIndexes }
         require(requestedQuantity <= availableIndexes.size) {
             "Refund quantity exceeds the remaining quantity for this item."
@@ -474,12 +492,9 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
         var addedUpi = 0L
         var addedAmount = 0L
         refundIndexes.forEach { unitIndex ->
-            val movements = saleUnitConsumptionMovements(line.id, unitIndex)
-            require(movements.isNotEmpty()) {
+            val unitMovements = allLineMovements.filter { it.saleUnitIndex == unitIndex }
+            require(unitMovements.isNotEmpty() && unitMovements.all { it.quantityBaseUnits > 0 }) {
                 "Exact FIFO trace is unavailable for this sold unit. Refund blocked rather than guessing ingredient quantities."
-            }
-            require(movements.all { it.saleUnitIndex == unitIndex && it.saleLineId == line.id && it.referenceId == saleId && it.quantityBaseUnits > 0 }) {
-                "The original unit stock trace is incomplete. Refund blocked."
             }
             val unitAmount = line.unitPricePaise
             val allocation = PartialRefundRules.allocateTender(
@@ -489,15 +504,28 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
                 Math.addExact(previousUpi, addedUpi),
                 unitAmount
             )
-            movements.forEach { movement ->
-                val lot = stockLot(movement.lotId) ?: error("Original FIFO lot is missing. Refund blocked.")
-                require(lot.ingredientId == movement.ingredientId && lot.location == movement.fromLocation)
-                val cost = calculateFifoCostPaise(listOf(movement.quantityBaseUnits to movement.unitCostPaise))
+            unitMovements.groupBy { it.ingredientId }.forEach { (ingredientId, ingredientMovements) ->
+                val lots = ingredientMovements.map { movement ->
+                    val lot = stockLot(movement.lotId) ?: error("Original FIFO lot is missing. Refund blocked.")
+                    require(lot.ingredientId == ingredientId && lot.location == movement.fromLocation)
+                    lot
+                }
+                require(lots.map { it.location }.distinct().size == 1)
+                val ingredientLineMovements = allLineMovements.filter { it.ingredientId == ingredientId }
+                val priorUnitCost = calculateFifoCostPaise(
+                    ingredientLineMovements.filter { (it.saleUnitIndex ?: -1) < unitIndex }
+                        .map { it.quantityBaseUnits to it.unitCostPaise }
+                )
+                val cumulativeUnitCost = calculateFifoCostPaise(
+                    ingredientLineMovements.filter { (it.saleUnitIndex ?: -1) <= unitIndex }
+                        .map { it.quantityBaseUnits to it.unitCostPaise }
+                )
+                val exactUnitCost = Math.subtractExact(cumulativeUnitCost, priorUnitCost)
+                val quantity = ingredientMovements.fold(0L) { total, movement -> Math.addExact(total, movement.quantityBaseUnits) }
                 insertWastage(WastageRecord(
-                    UUID.randomUUID().toString(), movement.ingredientId, lot.location,
-                    movement.quantityBaseUnits,
+                    UUID.randomUUID().toString(), ingredientId, lots.first().location, quantity,
                     "FOOD REFUND • Sale $saleId • ${line.itemName} • Unit ${unitIndex + 1}: ${reason.trim()}",
-                    refundedAt, cost
+                    refundedAt, exactUnitCost
                 ))
             }
             insertSaleLineRefund(SaleLineRefund(
@@ -530,8 +558,9 @@ suspend fun replaceComboComponents(comboItemId: String, components: List<ComboCo
             rebuildLoyaltyAccount(sale.customerPhone, refundedAt)
         }
         val allLines = saleLines(saleId)
+        val refundedRows = saleLineRefunds(saleId)
         val allRefunded = allLines.all { saleLine ->
-            saleLineRefunds(saleId).filter { it.saleLineId == saleLine.id }.sumOf { it.refundedQuantity } >= saleLine.quantity
+            refundedRows.filter { it.saleLineId == saleLine.id }.sumOf { it.refundedQuantity } >= saleLine.quantity
         }
         updateSaleStatus(saleId, if (allRefunded) "REFUNDED" else "PARTIALLY_REFUNDED")
         if (allRefunded) updateKitchenTicketStatus(saleId, "CANCELLED", refundedAt)
