@@ -132,3 +132,12 @@ Do not merge this work to main or distribute it as a production release until CI
 - JVM tests cover round-trip recovery, wrong passphrases, ciphertext tampering and minimum passphrase length.
 - Portable backup encryption is separate from the live database's SQLCipher encryption. Backup files can be restored on another device because the receiving installation re-encrypts the restored database with its own Android Keystore-protected key.
 - Existing raw .db backups from earlier builds are not encrypted-format backups; retain the old app build and the original backup until legacy restore compatibility is explicitly validated. Do not delete older backup copies.
+
+
+## Standalone APK boundary (confirmed 2026-11-04)
+
+- The deliverable is the native Android APK in this repository. Apper is not the application host, UI runtime, authentication provider, database, backend, or deployment target.
+- Apper may be consulted only as a read-only reference source to retrieve existing business data (for example catalogue/menu items, recipes, ingredient definitions and opening reference values) for review and controlled import into the native app.
+- The APK must remain fully usable if Apper is disconnected, deleted, unavailable or its project changes. Do not add Apper SDKs, webviews, API runtime dependencies, login dependencies, or automatic bidirectional sync.
+- Any reference-data import must be explicit, validated and auditable: preview records, detect duplicates, validate units and relationships, then import into the local Room database. Never overwrite live sales, stock movements, FIFO lots, staff PINs, cash shifts or audit history from Apper reference data.
+- The local Room database remains the operational source of truth. Offline checkout, inventory accounting, refunds, wastage and reports must execute locally. Future optional sync, if separately approved, must use a backend independent of Apper.
