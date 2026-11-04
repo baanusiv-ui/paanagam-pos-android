@@ -26,6 +26,7 @@ private val HistoryPanel = Color(0xFF3A2519)
 @Composable
 fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
     val sales by db.dao().sales().collectAsState(initial = emptyList())
+    val refunds by db.dao().allSaleRefunds().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var expandedSaleId by remember { mutableStateOf<String?>(null) }
     var selectedLines by remember { mutableStateOf<List<SaleLine>>(emptyList()) }
@@ -48,7 +49,9 @@ fun SalesHistoryScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
         calendar.timeInMillis
     }
     val todaySales = sales.filter { it.createdAt >= todayStart }
-    val todayTotal = todaySales.sumOf { it.totalPaise }
+    val todayGross = todaySales.sumOf { it.totalPaise }
+    val todayRefunds = refunds.filter { it.refundedAt >= todayStart }.sumOf { it.amountPaise }
+    val todayTotal = todayGross - todayRefunds
     val formatter = remember { SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()) }
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
