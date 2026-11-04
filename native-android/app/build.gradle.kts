@@ -11,8 +11,8 @@ android {
         applicationId = "in.paanagam.business"
         minSdk = 26
         targetSdk = 35
-        versionCode = 71
-        versionName = "0.3.0"
+        versionCode = 72
+        versionName = "0.3.1"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -22,6 +22,9 @@ android {
         jvmTarget = "17"
     }
     buildFeatures { compose = true }
+}
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
