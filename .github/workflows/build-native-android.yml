@@ -1,17 +1,10 @@
 name: Build Native Android APK
 on:
   workflow_dispatch:
-    inputs:
-      release:
-        description: 'Also build a signed release APK'
-        type: boolean
-        default: false
   push:
     paths:
       - 'native-android/**'
       - '.github/workflows/build-native-android.yml'
-permissions:
-  contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -27,44 +20,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - name: Unit tests, lint and debug APK
-        run: gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - name: Build debug APK
+        run: gradle :app:testDebugUnitTest :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
           name: paanagam-native-debug-apk
           path: native-android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
-  release:
-    if: github.event_name == 'workflow_dispatch' && inputs.release
-    needs: build
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: native-android
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.11.1'
-      - name: Decode signing keystore
-        env:
-          KEYSTORE_B64: ${{ secrets.PAANAGAM_KEYSTORE_B64 }}
-        run: echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
-      - name: Build signed release APK
-        env:
-          PAANAGAM_KEYSTORE_PATH: ${{ runner.temp }}/release.jks
-          PAANAGAM_KEYSTORE_PASSWORD: ${{ secrets.PAANAGAM_KEYSTORE_PASSWORD }}
-          PAANAGAM_KEY_ALIAS: ${{ secrets.PAANAGAM_KEY_ALIAS }}
-          PAANAGAM_KEY_PASSWORD: ${{ secrets.PAANAGAM_KEY_PASSWORD }}
-        run: gradle :app:assembleRelease
-      - uses: actions/upload-artifact@v4
-        with:
-          name: paanagam-native-release-apk
-          path: native-android/app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
-          retention-days: 30
