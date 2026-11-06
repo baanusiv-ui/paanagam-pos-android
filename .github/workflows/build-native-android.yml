@@ -1,30 +1,48 @@
-name: Build Native Android APK
-on:
-  workflow_dispatch:
-  push:
-    paths:
-      - 'native-android/**'
-      - '.github/workflows/build-native-android.yml'
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: native-android
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.11.1'
-      - name: Build debug APK
-        run: gradle :app:testDebugUnitTest :app:assembleDebug
-      - uses: actions/upload-artifact@v4
-        with:
-          name: paanagam-native-debug-apk
-          path: native-android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 14
+# Put this file at .github/dependabot.yml
+#
+# IMPORTANT for this app: Room, SQLCipher and Media3 updates touch the database engine and
+# camera playback. CI passing is not enough - test a Room/SQLCipher bump on a real device
+# (open an existing database, migrate, back up and restore) before merging it.
+# Kotlin, KSP and the Android Gradle Plugin must move together; merge those PRs deliberately.
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/native-android"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      kotlin-and-ksp:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "com.google.devtools.ksp*"
+      androidx-compose:
+        patterns:
+          - "androidx.compose*"
+      androidx-other:
+        patterns:
+          - "androidx.*"
+        exclude-patterns:
+          - "androidx.compose*"
+          - "androidx.room*"
+          - "androidx.sqlite*"
+          - "androidx.media3*"
+      database-engine:
+        patterns:
+          - "androidx.room*"
+          - "androidx.sqlite*"
+          - "net.zetetic*"
+      media3:
+        patterns:
+          - "androidx.media3*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      actions:
+        patterns:
+          - "*"
