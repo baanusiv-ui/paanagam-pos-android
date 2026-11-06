@@ -1,0 +1,48 @@
+# Put this file at .github/dependabot.yml
+#
+# IMPORTANT for this app: Room, SQLCipher and Media3 updates touch the database engine and
+# camera playback. CI passing is not enough - test a Room/SQLCipher bump on a real device
+# (open an existing database, migrate, back up and restore) before merging it.
+# Kotlin, KSP and the Android Gradle Plugin must move together; merge those PRs deliberately.
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/native-android"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      kotlin-and-ksp:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "com.google.devtools.ksp*"
+      androidx-compose:
+        patterns:
+          - "androidx.compose*"
+      androidx-other:
+        patterns:
+          - "androidx.*"
+        exclude-patterns:
+          - "androidx.compose*"
+          - "androidx.room*"
+          - "androidx.sqlite*"
+          - "androidx.media3*"
+      database-engine:
+        patterns:
+          - "androidx.room*"
+          - "androidx.sqlite*"
+          - "net.zetetic*"
+      media3:
+        patterns:
+          - "androidx.media3*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      actions:
+        patterns:
+          - "*"
