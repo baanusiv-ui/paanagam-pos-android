@@ -21,11 +21,11 @@ private data class PlanStockLine(val ingredientId: String, val name: String, val
 
 @Composable
 fun NextDayPlanningScreen(db: PaanagamDatabase) {
-    val catalog by db.dao().catalog().collectAsState(initial = emptyList())
-    val ingredients by db.dao().ingredients().collectAsState(initial = emptyList())
-    val plans by db.dao().nextDayPlans().collectAsState(initial = emptyList())
-    val allRecipes by db.dao().allRecipeLines().collectAsState(initial = emptyList())
-    val allCombos by db.dao().allComboComponents().collectAsState(initial = emptyList())
+    val catalog by rememberDbFlow(db, emptyList()) { d -> d.catalog() }
+    val ingredients by rememberDbFlow(db, emptyList()) { d -> d.ingredients() }
+    val plans by rememberDbFlow(db, emptyList()) { d -> d.nextDayPlans() }
+    val allRecipes by rememberDbFlow(db, emptyList()) { d -> d.allRecipeLines() }
+    val allCombos by rememberDbFlow(db, emptyList()) { d -> d.allComboComponents() }
     val scope = rememberCoroutineScope()
     val gold = Color(0xFF16845B)
     val ink = Color(0xFF20332B)

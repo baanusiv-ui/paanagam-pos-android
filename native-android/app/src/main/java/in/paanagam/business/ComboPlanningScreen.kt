@@ -16,10 +16,10 @@ import java.math.RoundingMode
 
 @Composable
 fun ComboPlanningScreen(db: PaanagamDatabase) {
-    val catalog by db.dao().catalog().collectAsState(initial = emptyList())
-    val ingredients by db.dao().ingredients().collectAsState(initial = emptyList())
-    val allRecipes by db.dao().allRecipeLines().collectAsState(initial = emptyList())
-    val combos by db.dao().allComboComponents().collectAsState(initial = emptyList())
+    val catalog by rememberDbFlow(db, emptyList()) { d -> d.catalog() }
+    val ingredients by rememberDbFlow(db, emptyList()) { d -> d.ingredients() }
+    val allRecipes by rememberDbFlow(db, emptyList()) { d -> d.allRecipeLines() }
+    val combos by rememberDbFlow(db, emptyList()) { d -> d.allComboComponents() }
     val scope = rememberCoroutineScope()
     var comboName by remember { mutableStateOf("") }
     var comboPrice by remember { mutableStateOf("") }

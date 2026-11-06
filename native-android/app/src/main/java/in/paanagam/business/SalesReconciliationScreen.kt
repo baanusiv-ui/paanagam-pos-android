@@ -24,9 +24,9 @@ import java.math.RoundingMode
 
 @Composable
 fun SalesReconciliationScreen(db: PaanagamDatabase) {
-    val sales by db.dao().sales().collectAsState(initial = emptyList())
-    val refunds by db.dao().allSaleRefunds().collectAsState(initial = emptyList())
-    val history by db.dao().salesReconciliations().collectAsState(initial = emptyList())
+    val sales by rememberDbFlow(db, emptyList()) { d -> d.sales() }
+    val refunds by rememberDbFlow(db, emptyList()) { d -> d.allSaleRefunds() }
+    val history by rememberDbFlow(db, emptyList()) { d -> d.salesReconciliations() }
     val scope = rememberCoroutineScope()
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
     var businessDate by remember { mutableStateOf(dateFormat.format(Date())) }

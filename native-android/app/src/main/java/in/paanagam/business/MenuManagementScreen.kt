@@ -18,7 +18,7 @@ import java.util.UUID
 
 @Composable
 fun MenuManagementScreen(db: PaanagamDatabase) {
-    val items by db.dao().allCatalog().collectAsState(initial = emptyList())
+    val items by rememberDbFlow(db, emptyList()) { d -> d.allCatalog() }
     val scope = rememberCoroutineScope()
     var selectedId by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }

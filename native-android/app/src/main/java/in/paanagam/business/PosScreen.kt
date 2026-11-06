@@ -34,12 +34,12 @@ private val PosMuted = Color(0xFF887766)
 
 @Composable
 fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
-    val catalog by db.dao().catalog().collectAsState(initial = emptyList())
-    val salesCount by db.dao().salesCount().collectAsState(initial = 0)
-    val heldOrders by db.dao().heldOrders().collectAsState(initial = emptyList())
-    val recipeLines by db.dao().allRecipeLines().collectAsState(initial = emptyList())
-    val comboComponents by db.dao().allComboComponents().collectAsState(initial = emptyList())
-    val activeShift by db.dao().activeCashShift().collectAsState(initial = null)
+    val catalog by rememberDbFlow(db, emptyList()) { d -> d.catalog() }
+    val salesCount by rememberDbFlow(db, 0) { d -> d.salesCount() }
+    val heldOrders by rememberDbFlow(db, emptyList()) { d -> d.heldOrders() }
+    val recipeLines by rememberDbFlow(db, emptyList()) { d -> d.allRecipeLines() }
+    val comboComponents by rememberDbFlow(db, emptyList()) { d -> d.allComboComponents() }
+    val activeShift by rememberDbFlow(db, null) { d -> d.activeCashShift() }
     val scope = rememberCoroutineScope()
 
     var search by remember { mutableStateOf("") }
@@ -102,7 +102,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
     }
     val missingRecipes = cartItems.map { it.first }.filter { hasMissingRecipe(it.id) }
     fun recordPreCheckoutAudit(eventType: String, reason: String, amountPaise: Long, onSaved: () -> Unit) {
-        scope.launch {
+        commitScope.launch {
             runCatching {
                 db.dao().insertCctvAuditEvent(
                     CctvAuditEvent(
@@ -132,7 +132,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
     fun loadDemoMenu() {
         if (!canSeedDemoMenu) return
         saving = true
-        scope.launch {
+        commitScope.launch {
             runCatching {
                 val existing = db.dao().allCatalog().first()
                 check(existing.isEmpty()) { "Menu already contains items. Demo data was not added." }
@@ -175,7 +175,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                                     Text(java.text.SimpleDateFormat("dd MMM, hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(held.createdAt)), style = MaterialTheme.typography.labelSmall)
                                 }
                                 TextButton(onClick = {
-                                    scope.launch {
+                                    commitScope.launch {
                                         val savedLines = db.dao().heldOrderLines(held.id)
                                         val restored = savedLines.associate { line ->
                                             val item = catalog.firstOrNull { it.id == line.itemId }
@@ -190,7 +190,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                                         message = "Held order restored."
                                     }
                                 }) { Text("Resume") }
-                                TextButton(onClick = { scope.launch { db.dao().removeHeldOrder(held.id) } }) { Text("Delete") }
+                                TextButton(onClick = { commitScope.launch { db.dao().removeHeldOrder(held.id) } }) { Text("Delete") }
                             }
                             HorizontalDivider()
                         }
@@ -273,7 +273,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                     onSaveNew = {
                         val pricePaise = runCatching { BigDecimal(newPrice).movePointRight(2).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
                         if (newName.isBlank() || pricePaise == null || pricePaise <= 0) message = "Enter a menu item and a valid price with up to 2 decimals."
-                        else scope.launch {
+                        else commitScope.launch {
                             db.dao().saveCatalogItem(CatalogItem(UUID.randomUUID().toString(), newName.trim(), newCategory.trim(), pricePaise, isCoffee = newIsCoffee))
                             newName = ""; newPrice = ""; newIsCoffee = false; showAddItem = false; message = "Menu item added."
                         }
@@ -322,7 +322,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                     onClear = { cancelReason = ""; showCancelDialog = true },
                     onHold = {
                         val heldId = UUID.randomUUID().toString()
-                        scope.launch {
+                        commitScope.launch {
                             runCatching {
                                 db.dao().saveHeldOrder(
                                     HeldOrder(heldId, System.currentTimeMillis(), customerPhone, total, orderMode),
@@ -343,7 +343,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                         if (redeemFreeCoffee && coffeeItem != null) {
                             lines.add(SaleLine(UUID.randomUUID().toString(), saleId, coffeeItem.id, coffeeItem.name, 1, 0L, 0L))
                         }
-                        scope.launch {
+                        commitScope.launch {
                             runCatching { db.dao().completeSale(Sale(saleId, System.currentTimeMillis(), total, payment, customerPhone = customerPhone, cashPaidPaise = cashPartPaise, upiPaidPaise = upiPartPaise, orderType = orderMode), lines) }
                                 .onSuccess { cart = emptyMap(); customerPhone = ""; cashPartInput = ""; redeemFreeCoffee = false; loyaltyRewards = 0; message = "Bill saved successfully." }
                                 .onFailure { message = it.message ?: "Checkout failed. No sale was confirmed." }
@@ -381,9 +381,9 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                     onSaveNew = {
                         val pricePaise = runCatching { BigDecimal(newPrice).movePointRight(2).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
                         if (newName.isBlank() || pricePaise == null || pricePaise <= 0) message = "Enter a menu item and a valid price with up to 2 decimals."
-                        else scope.launch {
+                        else commitScope.launch {
                             db.dao().saveCatalogItem(CatalogItem(UUID.randomUUID().toString(), newName.trim(), newCategory.trim(), pricePaise, isCoffee = newIsCoffee))
-                            newName = ""; newPrice = ""; showAddItem = false; message = "Menu item added."
+                            newName = ""; newPrice = ""; newIsCoffee = false; showAddItem = false; message = "Menu item added."
                         }
                     }
                 )
@@ -431,7 +431,7 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                     onClear = { cancelReason = ""; showCancelDialog = true },
                     onHold = {
                         val heldId = UUID.randomUUID().toString()
-                        scope.launch {
+                        commitScope.launch {
                             runCatching {
                                 db.dao().saveHeldOrder(
                                     HeldOrder(heldId, System.currentTimeMillis(), customerPhone, total, orderMode),
@@ -450,8 +450,8 @@ fun PosScreen(db: PaanagamDatabase, staff: StaffMember) {
                             SaleLine(UUID.randomUUID().toString(), saleId, item.id, item.name, qty, item.pricePaise, item.pricePaise * qty)
                         }.toMutableList()
                         if (redeemFreeCoffee && coffeeItem != null) lines.add(SaleLine(UUID.randomUUID().toString(), saleId, coffeeItem.id, coffeeItem.name, 1, 0L, 0L))
-                        scope.launch {
-                            runCatching { db.dao().completeSale(Sale(saleId, System.currentTimeMillis(), total, payment, customerPhone = customerPhone, cashPaidPaise = cashPartPaise, upiPaidPaise = upiPartPaise), lines) }
+                        commitScope.launch {
+                            runCatching { db.dao().completeSale(Sale(saleId, System.currentTimeMillis(), total, payment, customerPhone = customerPhone, cashPaidPaise = cashPartPaise, upiPaidPaise = upiPartPaise, orderType = orderMode), lines) }
                                 .onSuccess { cart = emptyMap(); customerPhone = ""; cashPartInput = ""; redeemFreeCoffee = false; loyaltyRewards = 0; message = "Bill saved successfully." }
                                 .onFailure { message = it.message ?: "Checkout failed. No sale was confirmed." }
                             saving = false

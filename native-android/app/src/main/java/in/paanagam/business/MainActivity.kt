@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import `in`.paanagam.business.data.PaanagamDatabase
@@ -281,6 +280,41 @@ private val MIGRATION_32_33 = object : Migration(32, 33) {
     }
 }
 
+internal val ALL_MIGRATIONS: Array<Migration> = arrayOf(
+    MIGRATION_1_2,
+    MIGRATION_2_3,
+    MIGRATION_3_4,
+    MIGRATION_4_5,
+    MIGRATION_5_6,
+    MIGRATION_6_7,
+    MIGRATION_7_8,
+    MIGRATION_8_9,
+    MIGRATION_9_10,
+    MIGRATION_10_11,
+    MIGRATION_11_12,
+    MIGRATION_12_13,
+    MIGRATION_13_14,
+    MIGRATION_14_15,
+    MIGRATION_15_16,
+    MIGRATION_16_17,
+    MIGRATION_17_18,
+    MIGRATION_18_19,
+    MIGRATION_19_20,
+    MIGRATION_20_21,
+    MIGRATION_21_22,
+    MIGRATION_22_23,
+    MIGRATION_23_24,
+    MIGRATION_24_25,
+    MIGRATION_25_26,
+    MIGRATION_26_27,
+    MIGRATION_27_28,
+    MIGRATION_28_29,
+    MIGRATION_29_30,
+    MIGRATION_30_31,
+    MIGRATION_31_32,
+    MIGRATION_32_33
+)
+
 class MainActivity : ComponentActivity() {
     private val sessionPrefs by lazy { getSharedPreferences("paanagam_session_security", MODE_PRIVATE) }
     private var forcingSessionRelogin = false
@@ -305,53 +339,31 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-            ?: error("Android device identifier is unavailable.")
-        // Recover a pre-restore database before SQLCipher/Room can create a new
-        // empty live file. This covers process death between the two restore renames.
-        val startupLiveFile = getDatabasePath("paanagam-local.db")
-        val startupRestoreRecovery = getDatabasePath("paanagam-before-restore.db")
-        if (!startupLiveFile.exists() && startupRestoreRecovery.exists()) {
-            check(startupRestoreRecovery.renameTo(startupLiveFile)) {
-                "An interrupted restore was detected, but the previous database could not be recovered. The recovery file has been preserved."
+        window.setFlags(
+            android.view.WindowManager.LayoutParams.FLAG_SECURE,
+            android.view.WindowManager.LayoutParams.FLAG_SECURE
+        )
+        val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID).orEmpty()
+        val app = applicationContext
+        setContent {
+            val opened by produceState<Result<DatabaseHandle>?>(null) {
+                value = runCatching { PaanagamDatabaseProvider.open(app).await() }
             }
-        }
-        val databaseKey = PaanagamDatabaseSecurity.prepare(applicationContext)
-        val db = Room.databaseBuilder(applicationContext, PaanagamDatabase::class.java, "paanagam-local.db")
-            .openHelperFactory(PaanagamDatabaseSecurity.roomOpenHelperFactory(databaseKey))
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33)
-            .build()
-        val liveFile = getDatabasePath("paanagam-local.db")
-        val recoveryFile = getDatabasePath("paanagam-before-restore.db")
-        val migrationRecoveryFile = getDatabasePath("paanagam-local.db.plaintext-recovery")
-        try {
-            db.openHelper.writableDatabase
-        } catch (failure: Throwable) {
-            db.close()
-            if (recoveryFile.exists()) {
-                liveFile.delete()
-                check(recoveryFile.renameTo(liveFile)) {
-                    "Database open failed and the pre-restore database could not be recovered."
+            val result = opened
+            when {
+                result == null -> StartupSplash()
+                result.isFailure -> StartupError(result.exceptionOrNull()?.message ?: "The database could not be opened.") {
+                    PaanagamDatabaseProvider.invalidate(); recreate()
                 }
-            } else if (migrationRecoveryFile.exists()) {
-                liveFile.delete()
-                check(migrationRecoveryFile.renameTo(liveFile)) {
-                    "Room migration failed and the original plaintext database could not be recovered."
+                androidId.isBlank() -> StartupError("Android device identifier is unavailable.") { recreate() }
+                else -> {
+                    val handle = result.getOrThrow()
+                    PaanagamApp(handle.db, androidId, handle.key) {
+                        PaanagamDatabaseProvider.invalidate(); recreate()
+                    }
                 }
             }
-            throw failure
         }
-
-        // Cleanup happens only after Room has opened successfully. A cleanup
-        // failure must never enter the database-open recovery handler and roll
-        // back a valid, already-opened database to an older plaintext copy.
-        if (recoveryFile.exists()) check(recoveryFile.delete()) {
-            "Database opened, but the previous restore recovery file could not be removed. Retry startup before using POS."
-        }
-        if (migrationRecoveryFile.exists()) check(migrationRecoveryFile.delete()) {
-            "Database opened, but the plaintext migration recovery file could not be removed. Retry startup before using POS."
-        }
-        setContent { PaanagamApp(db, androidId, databaseKey) { recreate() } }
     }
 }
 
@@ -381,7 +393,7 @@ private fun PaanagamApp(db: PaanagamDatabase, androidId: String, databaseKey: By
         deviceCheckComplete = true
     }
     var showMore by remember { mutableStateOf(false) }
-    val sops by db.dao().sops().collectAsState(initial = emptyList())
+    val sops by rememberDbFlow(db, emptyList()) { d -> d.sops() }
     val primaryTabs = if (activeStaff == null) listOf("Dashboard", "POS", "Inventory", "Sales History", "More") else listOf("Dashboard", "POS", "Inventory", "Sales History", "More").filter { tab -> tab == "More" || canAccess(activeStaff!!, tab) }
     MaterialTheme(
         colorScheme = lightColorScheme(
@@ -585,7 +597,7 @@ private fun AdminSetupScreen(onCreate: (String, String) -> Unit) {
 
 @Composable
 private fun StaffLoginScreen(db: PaanagamDatabase, onLogin: (StaffMember) -> Unit) {
-    val allStaff by db.dao().staffMembers().collectAsState(initial = emptyList())
+    val allStaff by rememberDbFlow(db, emptyList()) { d -> d.staffMembers() }
     val staff = allStaff.filter { it.active }
     val context = androidx.compose.ui.platform.LocalContext.current
     val securityPrefs = remember { context.getSharedPreferences("paanagam_login_security", android.content.Context.MODE_PRIVATE) }
@@ -737,7 +749,7 @@ private fun AdminReauthGate(staff: StaffMember, actionTitle: String, content: @C
 
 @Composable
 private fun StaffAdminScreen(db: PaanagamDatabase, current: StaffMember) {
-    val staff by db.dao().staffMembers().collectAsState(initial = emptyList())
+    val staff by rememberDbFlow(db, emptyList()) { d -> d.staffMembers() }
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var pin by remember { mutableStateOf("") }
@@ -822,17 +834,17 @@ private fun MoreModulesScreen(items: List<String>, onSelect: (String) -> Unit) {
 private fun DashboardScreen(db: PaanagamDatabase, adminView: Boolean, onNavigate: (String) -> Unit) {
     // Cashier sessions must not subscribe to business-wide financial or stock queries.
     // Empty flows keep the composable shape stable while enforcing data minimisation.
-    val salesFlow = if (adminView) db.dao().sales() else flowOf(emptyList())
-    val saleCostsFlow = if (adminView) db.dao().saleCosts() else flowOf(emptyList())
-    val wastageFlow = if (adminView) db.dao().wastageRecords() else flowOf(emptyList())
-    val refundsFlow = if (adminView) db.dao().allSaleRefunds() else flowOf(emptyList())
-    val lowStockFlow = if (adminView) db.dao().lowStockCount() else flowOf(0)
+    val salesFlow = remember(db, adminView) { if (adminView) db.dao().sales() else flowOf(emptyList()) }
+    val saleCostsFlow = remember(db, adminView) { if (adminView) db.dao().saleCosts() else flowOf(emptyList()) }
+    val wastageFlow = remember(db, adminView) { if (adminView) db.dao().wastageRecords() else flowOf(emptyList()) }
+    val refundsFlow = remember(db, adminView) { if (adminView) db.dao().allSaleRefunds() else flowOf(emptyList()) }
+    val lowStockFlow = remember(db, adminView) { if (adminView) db.dao().lowStockCount() else flowOf(0) }
     val sales by salesFlow.collectAsState(initial = emptyList())
     val saleCosts by saleCostsFlow.collectAsState(initial = emptyList())
     val wastage by wastageFlow.collectAsState(initial = emptyList())
     val refunds by refundsFlow.collectAsState(initial = emptyList())
     val lowStockCount by lowStockFlow.collectAsState(initial = 0)
-    val todayStart = remember {
+    val todayStart = remember(java.time.LocalDate.now()) {
         java.util.Calendar.getInstance().apply {
             set(java.util.Calendar.HOUR_OF_DAY, 0)
             set(java.util.Calendar.MINUTE, 0)

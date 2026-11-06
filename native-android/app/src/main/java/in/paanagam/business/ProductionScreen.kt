@@ -19,8 +19,8 @@ import java.math.RoundingMode
 
 @Composable
 fun ProductionScreen(db: PaanagamDatabase) {
-    val ingredients by db.dao().ingredients().collectAsState(initial = emptyList())
-    val wastageRecords by db.dao().wastageRecords().collectAsState(initial = emptyList())
+    val ingredients by rememberDbFlow(db, emptyList()) { d -> d.ingredients() }
+    val wastageRecords by rememberDbFlow(db, emptyList()) { d -> d.wastageRecords() }
     val scope = rememberCoroutineScope()
     var powder by remember { mutableStateOf("") }
     var water by remember { mutableStateOf("") }
@@ -61,7 +61,7 @@ fun ProductionScreen(db: PaanagamDatabase) {
                 }
                 Button(onClick = {
                     if (powder.isBlank() || water.isBlank() || decoction.isBlank()) message = "Create/select coffee powder (g), water (ml), and coffee decoction (ml) ingredients first."
-                    else scope.launch {
+                    else commitScope.launch {
                         val now = System.currentTimeMillis()
                         val batch = ProductionBatch(UUID.randomUUID().toString(), "Coffee decoction", now, 250, 1100, 1000, 100)
                         runCatching { db.dao().produceCoffeeDecoction(batch, powder, water, decoction) }
@@ -89,7 +89,7 @@ fun ProductionScreen(db: PaanagamDatabase) {
                 Button(onClick = {
                     val quantity = runCatching { BigDecimal(wastageQty).movePointRight(3).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
                     if (wastageItem.isBlank() || quantity == null || quantity <= 0 || reason.isBlank()) message = "Enter a valid quantity (up to 3 decimals) and reason"
-                    else scope.launch {
+                    else commitScope.launch {
                         val record = WastageRecord(UUID.randomUUID().toString(), wastageItem, wastageLocation, quantity, reason.trim(), System.currentTimeMillis(), 0)
                         runCatching { db.dao().saveWastage(record) }
                             .onSuccess { wastageQty = ""; reason = ""; message = "Wastage recorded and stock reduced using FIFO." }

@@ -19,10 +19,11 @@ private val ReportGold = Color(0xFF16845B)
 
 @Composable
 fun ReportsScreen(db: PaanagamDatabase, title: String) {
-    val sales by db.dao().sales().collectAsState(initial = emptyList())
-    val costs by db.dao().saleCosts().collectAsState(initial = emptyList())
-    val refunds by db.dao().allSaleRefunds().collectAsState(initial = emptyList())
-    val expenses by db.dao().operationalRecords("Operating Expenses").collectAsState(initial = emptyList())
+    val sales by rememberDbFlow(db, emptyList()) { d -> d.sales() }
+    val costs by rememberDbFlow(db, emptyList()) { d -> d.saleCosts() }
+    val refunds by rememberDbFlow(db, emptyList()) { d -> d.allSaleRefunds() }
+    val expensesFlow = remember(db) { db.dao().operationalRecords("Operating Expenses") }
+    val expenses by expensesFlow.collectAsState(initial = emptyList())
     val costBySale = remember(costs) { costs.associate { it.saleId to it.ingredientCostPaise } }
     val todayKey = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
     val today = sales.filter { SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date(it.createdAt)) == todayKey }

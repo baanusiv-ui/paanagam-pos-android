@@ -54,7 +54,7 @@ private val CctvPanel = Color(0xFF3A2519)
 @Composable
 fun CctvScreen(db: PaanagamDatabase, currentStaff: StaffMember) {
     val context = LocalContext.current
-    val events by db.dao().cctvAuditEvents().collectAsState(initial = emptyList())
+    val events by rememberDbFlow(db, emptyList()) { d -> d.cctvAuditEvents() }
     val scope = rememberCoroutineScope()
     var host by remember { mutableStateOf("") }
     var path by remember { mutableStateOf("/stream1") }

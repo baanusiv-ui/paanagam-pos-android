@@ -27,9 +27,9 @@ private val InvPanel = Color(0xFF3A2519)
 
 @Composable
 fun InventoryScreen(db: PaanagamDatabase, mode: String) {
-    val ingredients by db.dao().ingredients().collectAsState(initial = emptyList())
-    val suppliers by db.dao().suppliers().collectAsState(initial = emptyList())
-    val stockMovements by db.dao().stockMovements().collectAsState(initial = emptyList())
+    val ingredients by rememberDbFlow(db, emptyList()) { d -> d.ingredients() }
+    val suppliers by rememberDbFlow(db, emptyList()) { d -> d.suppliers() }
+    val stockMovements by rememberDbFlow(db, emptyList()) { d -> d.stockMovements() }
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var unit by remember { mutableStateOf("g") }
@@ -72,7 +72,7 @@ fun InventoryScreen(db: PaanagamDatabase, mode: String) {
                     Row { Checkbox(checked = coffee, onCheckedChange = { coffee = it }); Text("Coffee powder (250 g issue rule)", color = InvIvory, modifier = Modifier.padding(top = 12.dp)) }
                     Button(onClick = {
                         if (name.isBlank() || unit.isBlank()) message = "Enter ingredient name and base unit"
-                        else scope.launch {
+                        else commitScope.launch {
                             val item = Ingredient(UUID.randomUUID().toString(), name.trim(), unit.trim(), coffee)
                             db.dao().insertIngredient(item)
                             selectedId = item.id
@@ -94,7 +94,7 @@ fun InventoryScreen(db: PaanagamDatabase, mode: String) {
                         val store = runCatching { BigDecimal(storeMinimum).movePointRight(3).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
                         val kitchen = runCatching { BigDecimal(kitchenMinimum).movePointRight(3).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
                         if (item == null || store == null || kitchen == null || store < 0 || kitchen < 0) message = "Enter valid levels with up to 3 decimal places (zero disables an alert)"
-                        else scope.launch {
+                        else commitScope.launch {
                             runCatching {
                                 db.dao().updateIngredient(item.copy(storeMinStockBaseUnits = store, kitchenMinStockBaseUnits = kitchen))
                             }.onSuccess { message = "Minimum stock levels saved" }
@@ -138,7 +138,7 @@ fun InventoryScreen(db: PaanagamDatabase, mode: String) {
                             val quantity = runCatching { BigDecimal(qty).movePointRight(3).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
                             val unitCost = runCatching { BigDecimal(cost).movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValueExact() }.getOrNull()
                             if (item == null || quantity == null || unitCost == null || quantity <= 0 || unitCost < 0) message = "Check quantity (up to 3 decimals) and cost"
-                            else scope.launch {
+                            else commitScope.launch {
                                 val purchaseId = UUID.randomUUID().toString()
                                 val lotId = UUID.randomUUID().toString()
                                 val total = Math.multiplyExact(quantity, unitCost) / 1000L
@@ -178,7 +178,7 @@ fun InventoryScreen(db: PaanagamDatabase, mode: String) {
                             val item = ingredients.firstOrNull { it.id == selectedId }
                             val q = runCatching { BigDecimal(transferQty).movePointRight(3).setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
                             if (item == null || q == null || q <= 0) message = "Enter a valid transfer quantity (up to 3 decimals)"
-                            else scope.launch {
+                            else commitScope.launch {
                                 val transfer = StockTransfer(UUID.randomUUID().toString(), from, if (from == "STORE") "KITCHEN" else "STORE", System.currentTimeMillis())
                                 runCatching { db.dao().transferFifo(transfer, item.id, q) }
                                     .onSuccess {

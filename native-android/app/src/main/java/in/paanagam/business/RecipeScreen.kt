@@ -18,9 +18,9 @@ import java.math.RoundingMode
 
 @Composable
 fun RecipeScreen(db: PaanagamDatabase) {
-    val catalog by db.dao().catalog().collectAsState(initial = emptyList())
-    val ingredients by db.dao().ingredients().collectAsState(initial = emptyList())
-    val recipeLines by db.dao().allRecipeLines().collectAsState(initial = emptyList())
+    val catalog by rememberDbFlow(db, emptyList()) { d -> d.catalog() }
+    val ingredients by rememberDbFlow(db, emptyList()) { d -> d.ingredients() }
+    val recipeLines by rememberDbFlow(db, emptyList()) { d -> d.allRecipeLines() }
     val scope = rememberCoroutineScope()
     var menuId by remember { mutableStateOf("") }
     var ingredientId by remember { mutableStateOf("") }

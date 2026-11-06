@@ -13,7 +13,7 @@ import `in`.paanagam.business.data.PaanagamDatabase
 
 @Composable
 fun LoyaltyScreen(db: PaanagamDatabase) {
-    val accounts by db.dao().loyaltyAccounts().collectAsState(initial = emptyList())
+    val accounts by rememberDbFlow(db, emptyList()) { d -> d.loyaltyAccounts() }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Coffee loyalty", color = Color(0xFF16845B), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text("Every 10 coffee servings earn 1 free coffee. Add the customer's mobile number at POS to track automatically.", color = Color(0xFF65736B))

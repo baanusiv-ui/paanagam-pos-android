@@ -22,8 +22,8 @@ import java.math.RoundingMode
 
 @Composable
 fun StockReconciliationScreen(db: PaanagamDatabase) {
-    val ingredients by db.dao().ingredients().collectAsState(initial = emptyList())
-    val history by db.dao().stockReconciliations().collectAsState(initial = emptyList())
+    val ingredients by rememberDbFlow(db, emptyList()) { d -> d.ingredients() }
+    val history by rememberDbFlow(db, emptyList()) { d -> d.stockReconciliations() }
     val scope = rememberCoroutineScope()
     var selectedId by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("STORE") }
