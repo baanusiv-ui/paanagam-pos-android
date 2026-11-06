@@ -1,48 +1,62 @@
-# Put this file at .github/dependabot.yml
-#
-# IMPORTANT for this app: Room, SQLCipher and Media3 updates touch the database engine and
-# camera playback. CI passing is not enough - test a Room/SQLCipher bump on a real device
-# (open an existing database, migrate, back up and restore) before merging it.
-# Kotlin, KSP and the Android Gradle Plugin must move together; merge those PRs deliberately.
-version: 2
-updates:
-  - package-ecosystem: "gradle"
-    directory: "/native-android"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
-    groups:
-      kotlin-and-ksp:
-        patterns:
-          - "org.jetbrains.kotlin*"
-          - "com.google.devtools.ksp*"
-      androidx-compose:
-        patterns:
-          - "androidx.compose*"
-      androidx-other:
-        patterns:
-          - "androidx.*"
-        exclude-patterns:
-          - "androidx.compose*"
-          - "androidx.room*"
-          - "androidx.sqlite*"
-          - "androidx.media3*"
-      database-engine:
-        patterns:
-          - "androidx.room*"
-          - "androidx.sqlite*"
-          - "net.zetetic*"
-      media3:
-        patterns:
-          - "androidx.media3*"
+name: Build Native Android APK
 
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    groups:
-      actions:
-        patterns:
-          - "*"
+# Replaces .github/workflows/build-native-android.yml (same name and artifact as before).
+# Changes: read-only token, cancel superseded runs, job timeout, no stored git credentials,
+# Gradle cache written only from main, and test reports uploaded when a build fails.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'native-android/**'
+      - '.github/workflows/build-native-android.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: native-android
+    steps:
+      # Actions are pinned to major-version tags. For stronger supply-chain protection,
+      # pin each to a full commit SHA (Dependabot's github-actions updates will then keep them current).
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Unit tests and debug APK
+        run: gradle :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Upload test reports (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paanagam-native-test-reports
+          path: native-android/app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: paanagam-native-debug-apk
+          path: native-android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
